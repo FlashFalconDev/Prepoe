@@ -26,7 +26,7 @@ import {
   type CreatePlatformRequest,
   type AIAssistant
 } from '../services/chatPlatform';
-import { API_ENDPOINTS, createChatUrl } from '../config/api';
+import { API_ENDPOINTS, createChatUrl, getAIAssistants } from '../config/api';
 import PlatformIcon from '../components/PlatformIcon';
 
 // 時間格式化函數 - 相對時間格式（用於對話列表）
@@ -195,6 +195,9 @@ const ChatPlatformManagement: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [showCreatePlatform, setShowCreatePlatform] = useState(false);
   
+  // AI助手列表狀態
+  const [aiAssistants, setAiAssistants] = useState<AIAssistant[]>([]);
+  
   // 防止重複 API 調用
   const hasInitialized = useRef(false);
   
@@ -213,10 +216,17 @@ const ChatPlatformManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'waiting' | 'resolved'>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | 'low' | 'medium' | 'high' | 'urgent'>('all');
   const [filterRole, setFilterRole] = useState<'all' | 'manager' | 'participant'>('all');
-  
+  const [filterPlatform, setFilterPlatform] = useState<string>('all'); // 平台篩選
+
+  // 排序狀態
+  const [sortBy, setSortBy] = useState<'time' | 'emotion' | 'urgency' | 'sales'>('time');
+
   // 載入狀態
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // Summary 列表狀態
+  const [showSummaryList, setShowSummaryList] = useState(false);
 
   // 使用useRef來創建更可靠的防重複調用機制
   const fetchInProgressRef = useRef(false);
@@ -270,37 +280,67 @@ const ChatPlatformManagement: React.FC = () => {
   // 編輯模式狀態
   const [showEditPlatform, setShowEditPlatform] = useState(false);
 
+  // 獲取所有唯一的平台名稱
+  const uniquePlatforms = useMemo(() => {
+    const platformNames = new Set<string>();
+    allSessions.forEach(session => {
+      if (session.platform?.name) {
+        platformNames.add(session.platform.name);
+      }
+    });
+    const platforms = Array.from(platformNames).sort();
+    console.log('🔍 可用平台列表:', platforms);
+    console.log('🔍 總對話數:', allSessions.length);
+    return platforms;
+  }, [allSessions]);
+
   // 篩選和分頁計算
   const filteredSessions = useMemo(() => {
     let filtered = allSessions;
-    
+
+    console.log('🔍 開始篩選，當前平台篩選:', filterPlatform);
+    console.log('🔍 篩選前對話數:', filtered.length);
+
     // 搜索篩選
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(session => 
+      filtered = filtered.filter(session =>
         session.session_title.toLowerCase().includes(query) ||
         session.platform.name.toLowerCase().includes(query) ||
         (session.last_message?.content || '').toLowerCase().includes(query)
       );
     }
-    
+
+    // 平台篩選
+    if (filterPlatform !== 'all') {
+      console.log('🔍 執行平台篩選:', filterPlatform);
+      filtered = filtered.filter(session => {
+        const match = session.platform.name === filterPlatform;
+        if (!match) {
+          console.log(`❌ 不匹配: ${session.platform.name} !== ${filterPlatform}`);
+        }
+        return match;
+      });
+      console.log('🔍 平台篩選後對話數:', filtered.length);
+    }
+
     // 狀態篩選
     if (filterStatus !== 'all') {
       filtered = filtered.filter(session => session.status === filterStatus);
     }
-    
+
     // 優先級篩選
     if (filterPriority !== 'all') {
       filtered = filtered.filter(session => session.priority === filterPriority);
     }
-    
+
     // 角色篩選
     if (filterRole !== 'all') {
       filtered = filtered.filter(session => session.user_role === filterRole);
     }
-    
+
     return filtered;
-  }, [allSessions, searchQuery, filterStatus, filterPriority, filterRole]);
+  }, [allSessions, searchQuery, filterStatus, filterPriority, filterRole, filterPlatform]);
   
   // 分頁計算
   const totalPages = Math.ceil(filteredSessions.length / pageSize);
@@ -347,6 +387,34 @@ const ChatPlatformManagement: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  // 載入 AI 助手列表
+  useEffect(() => {
+    const loadAIAssistants = async () => {
+      try {
+        console.log('🤖 開始載入 AI 助手列表...');
+        const response = await getAIAssistants(1, 100); // 獲取前100個助手
+        console.log('🤖 AI 助手列表響應:', response);
+        
+        // 根據不同的響應格式處理數據
+        if (Array.isArray(response)) {
+          setAiAssistants(response);
+          console.log('✅ AI 助手列表載入成功（數組格式）:', response.length, '個助手');
+        } else if (response && response.data) {
+          if (Array.isArray(response.data.assistants)) {
+            setAiAssistants(response.data.assistants);
+            console.log('✅ AI 助手列表載入成功（assistants格式）:', response.data.assistants.length, '個助手');
+          } else if (Array.isArray(response.data)) {
+            setAiAssistants(response.data);
+            console.log('✅ AI 助手列表載入成功（data數組格式）:', response.data.length, '個助手');
+          }
+        }
+      } catch (error) {
+        console.error('❌ 載入 AI 助手列表失敗:', error);
+      }
+    };
+    
+    loadAIAssistants();
+  }, []);
 
   // 當路由是客服對話時，自動切換到對話管理標籤
   useEffect(() => {
@@ -551,6 +619,21 @@ const ChatPlatformManagement: React.FC = () => {
           console.log('🔍 訊息數量:', result.data.messages?.length || 0);
           console.log('🔍 第一條訊息結構:', result.data.messages?.[0]);
           
+          // 檢查原始數據結構
+          console.log('🔍 API返回的原始數據結構:', {
+            hasMessages: !!result.data.messages,
+            messageCount: result.data.messages?.length,
+            firstMessageKeys: result.data.messages?.[0] ? Object.keys(result.data.messages[0]) : [],
+            firstMessage: result.data.messages?.[0]
+          });
+          
+          // 檢查有多少訊息包含 summary
+          const messagesWithSummary = (result.data.messages || []).filter((m: any) => m.summary);
+          console.log('✅ 初始載入時有摘要的訊息數量:', messagesWithSummary.length);
+          if (messagesWithSummary.length > 0) {
+            console.log('✅ 有摘要的訊息範例:', messagesWithSummary.slice(0, 3).map((m: any) => ({ id: m.id, summary: m.summary })));
+          }
+          
           // 清理重複訊息後設置
           console.log('🔍 載入訊息 - 原始數量:', result.data.messages?.length || 0);
           console.log('🔍 載入訊息 - 原始IDs:', result.data.messages?.map((m: any) => m.id) || []);
@@ -558,6 +641,17 @@ const ChatPlatformManagement: React.FC = () => {
           const cleanedMessages = removeDuplicateMessages(result.data.messages || []);
           console.log('🔍 載入訊息 - 清理後數量:', cleanedMessages.length);
           console.log('🔍 載入訊息 - 清理後IDs:', cleanedMessages.map(m => m.id));
+          
+          // 清理後再次檢查 summary
+          const cleanedWithSummary = cleanedMessages.filter((m: any) => m.summary);
+          console.log('✅ 清理後有摘要的訊息數量:', cleanedWithSummary.length);
+          if (cleanedWithSummary.length > 0) {
+            console.log('✅ 清理後有摘要的訊息範例:', cleanedWithSummary.slice(0, 3).map((m: any) => ({ 
+              id: m.id, 
+              summary: m.summary,
+              content: (m.content || m.message || '').substring(0, 20)
+            })));
+          }
           
           setConversationMessages(cleanedMessages);
           
@@ -573,6 +667,19 @@ const ChatPlatformManagement: React.FC = () => {
             setLastMessageTime(lastMessage.timestamp || lastMessage.created_at);
             console.log('🔍 設置初始最後訊息時間:', lastMessage.timestamp || lastMessage.created_at);
           }
+          
+          // ⭐ 如果沒有 summary 欄位，嘗試使用完整 API 重新載入
+          if (cleanedWithSummary.length === 0 && cleanedMessages.length > 0) {
+            console.log('🔄 檢測到 API 未返回 summary，嘗試使用 check_new API 獲取完整數據...');
+            // 使用較早的時間來確保獲取所有訊息
+            const firstMessageTime = cleanedMessages[0]?.created_at || cleanedMessages[0]?.timestamp;
+            if (firstMessageTime) {
+              setTimeout(() => {
+                checkForNewMessagesWithFullData(sessionId, firstMessageTime);
+              }, 500);
+            }
+          }
+          
           // 自動滾動到底部
           setTimeout(() => {
             if (chatAreaRef.current) {
@@ -914,6 +1021,7 @@ const ChatPlatformManagement: React.FC = () => {
       
       if (result.success) {
         console.log('✅ 平台更新成功');
+        showSuccess('平台更新成功');
         setShowEditPlatform(false);
         setEditPlatformForm({
           id: 0,
@@ -926,11 +1034,11 @@ const ChatPlatformManagement: React.FC = () => {
         fetchMyPlatforms();
       } else {
         console.error('❌ 更新平台失敗:', (result as any).error || (result as any).message);
-        alert(`更新平台失敗: ${(result as any).error || (result as any).message || '未知錯誤'}`);
+        showError(`更新平台失敗: ${(result as any).error || (result as any).message || '未知錯誤'}`);
       }
     } catch (error) {
       console.error('❌ 更新平台時發生錯誤:', error);
-      alert(`更新平台時發生錯誤: ${error instanceof Error ? error.message : '未知錯誤'}`);
+      showError(`更新平台時發生錯誤: ${error instanceof Error ? error.message : '未知錯誤'}`);
     }
   };
 
@@ -1006,6 +1114,64 @@ const ChatPlatformManagement: React.FC = () => {
   const [isCheckingMessages, setIsCheckingMessages] = useState(false); // 防止重複檢查
   const [replyTokenCount, setReplyTokenCount] = useState<number>(0); // 存儲 Reply_Token 數量
 
+  // 使用 check_new API 獲取包含 summary 的完整數據
+  const checkForNewMessagesWithFullData = async (sessionId: string, sinceTime: string) => {
+    try {
+      // 使用很早的時間來獲取所有訊息
+      const url = `${API_ENDPOINTS.CHAT_CHECK_NEW(sessionId)}?last_time=2020-01-01T00:00:00.000Z`;
+      console.log('🔄 使用 check_new API 獲取完整數據:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🔄 check_new API 返回結果:', result);
+        
+        if (result.success && result.data.new_messages) {
+          console.log(`✅ 從 check_new 獲取到 ${result.data.new_messages.length} 條訊息`);
+          
+          // 映射訊息，包含 summary
+          const fullMessages = result.data.new_messages.map((msg: any) => {
+            const mappedMsg = {
+              id: msg.id,
+              message: msg.message || msg.content || msg.text,
+              content: msg.content || msg.message || msg.text,
+              message_type: msg.message_type,
+              sender_type: msg.sender_type,
+              timestamp: msg.created_at || msg.timestamp,
+              created_at: msg.created_at,
+              self: msg.self,
+              summary: msg.summary
+            };
+            
+            if (msg.summary) {
+              console.log('✅ 獲取到帶有摘要的訊息:', { id: msg.id, summary: msg.summary });
+            }
+            
+            return mappedMsg;
+          });
+          
+          // 統計 summary
+          const withSummary = fullMessages.filter((m: any) => m.summary);
+          console.log(`✅ 完整數據中有 ${withSummary.length} 條帶有摘要的訊息`);
+          
+          // 替換現有訊息
+          setConversationMessages(fullMessages);
+          
+          // 更新 Reply_Token
+          if (result.data.Reply_Token !== undefined) {
+            setReplyTokenCount(result.data.Reply_Token);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ 使用 check_new 獲取完整數據失敗:', error);
+    }
+  };
+
   // 輕量級檢查新訊息
   const checkForNewMessages = async (sessionId: string) => {
     console.log('🔍 檢查新訊息 - 當前訊息數量:', conversationMessages.length);
@@ -1060,14 +1226,26 @@ const ChatPlatformManagement: React.FC = () => {
           }
           
           // 只添加新訊息，不重新載入全部
-          const newMessages = result.data.new_messages.map((msg: any) => ({
-            id: msg.id,
-            message: msg.message || msg.content || msg.text,
-            message_type: msg.message_type,
-            sender_type: msg.sender_type,
-            timestamp: msg.created_at || msg.timestamp,
-            self: msg.self
-          }));
+          const newMessages = result.data.new_messages.map((msg: any) => {
+            const mappedMsg = {
+              id: msg.id,
+              message: msg.message || msg.content || msg.text,
+              content: msg.content || msg.message || msg.text,
+              message_type: msg.message_type,
+              sender_type: msg.sender_type,
+              timestamp: msg.created_at || msg.timestamp,
+              created_at: msg.created_at,
+              self: msg.self,
+              summary: msg.summary // 保留 summary 欄位
+            };
+            
+            // 如果有 summary，記錄日誌
+            if (msg.summary) {
+              console.log('✅ 輪詢獲取到帶有摘要的訊息:', { id: msg.id, summary: msg.summary });
+            }
+            
+            return mappedMsg;
+          });
           
           // 使用 PK 進行高效去重，並清理臨時訊息
           setConversationMessages(prev => {
@@ -1251,88 +1429,57 @@ const ChatPlatformManagement: React.FC = () => {
         {/* 平台管理標籤內容 */}
         {activeTab === 'platforms' && (
           <div className="p-4 sm:p-6 lg:p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-              <div className="mb-4 sm:mb-0">
-                {typeof featureFlag?.chat_platform_count !== 'undefined' && (
-                  <span className="text-sm text-gray-500">
-                    已使用：{platforms.length} / {Number(featureFlag?.chat_platform_count || 0)}
-                  </span>
-                )}
+            {/* 已使用數量顯示 */}
+            {typeof featureFlag?.chat_platform_count !== 'undefined' && (
+              <div className="mb-6">
+                <span className="text-sm font-medium text-gray-600">
+                  已使用：{platforms.length} / {Number(featureFlag?.chat_platform_count || 0)}
+                </span>
               </div>
-              <button
-                onClick={handleOpenCreatePlatform}
-                disabled={platforms.length >= Number(featureFlag?.chat_platform_count || 0)}
-                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                  platforms.length >= Number(featureFlag?.chat_platform_count || 0)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : `${AI_COLORS.button}`
-                }`}
-                title={
-                  platforms.length >= Number(featureFlag?.chat_platform_count || 0)
-                    ? `已達上限 (${platforms.length}/${featureFlag?.chat_platform_count})`
-                    : '建立新平台'
-                }
-              >
-                <Plus size={16} />
-                建立新平台
-              </button>
-            </div>
+            )}
 
             {loading ? (
               <div className="text-center py-8">
                 <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${AI_COLORS.border} mx-auto`}></div>
                 <p className="mt-2 text-gray-600">載入中...</p>
               </div>
-            ) : platforms.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Globe size={48} className="text-gray-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">還沒有平台</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  建立您的第一個客服平台來開始提供服務，為客戶提供更好的體驗
-                </p>
-                <button
-                  onClick={handleOpenCreatePlatform}
-                  disabled={platforms.length >= Number(featureFlag?.chat_platform_count || 0)}
-                  className={`px-6 py-3 rounded-lg transition-all duration-200 flex items-center gap-2 mx-auto ${
-                    platforms.length >= Number(featureFlag?.chat_platform_count || 0)
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : `${AI_COLORS.button}`
-                  }`}
-                  title={
-                    platforms.length >= Number(featureFlag?.chat_platform_count || 0)
-                      ? `已達上限 (${platforms.length}/${featureFlag?.chat_platform_count})`
-                      : '建立第一個平台'
-                  }
-                >
-                  <Plus size={20} />
-                  建立第一個平台
-                </button>
-              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {platforms.map((platform) => (
-                  <div key={platform.id} className={`bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200 hover:${AI_COLORS.border} group`}>
-                    {/* 卡片頭部 */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 truncate" title={platform.name}>
-                          {platform.name}
-                        </h4>
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2" title={platform.description}>
-                          {platform.description}
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
-                          <Globe size={14} className="text-gray-400" />
-                          <span className="font-mono text-xs truncate" title={platform.unique_code}>
-                            代碼: {platform.unique_code}
-                          </span>
+              <div className="grid grid-cols-1 gap-4">
+                {/* 建立新平台卡片 */}
+                {platforms.length < Number(featureFlag?.chat_platform_count || 0) && (
+                  <button
+                    onClick={handleOpenCreatePlatform}
+                    className="w-full bg-gray-50 hover:bg-gray-100 border-2 border-dashed border-gray-300 hover:border-purple-400 rounded-2xl p-6 transition-all duration-200 flex items-center justify-center gap-3 text-gray-600 hover:text-purple-600"
+                  >
+                    <Plus size={20} />
+                    <span className="font-medium">建立新平台</span>
+                  </button>
+                )}
+
+                {/* 平台列表 */}
+                {platforms.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Globe size={48} className="text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">還沒有平台</h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                      建立您的第一個客服平台來開始提供服務，為客戶提供更好的體驗
+                    </p>
+                  </div>
+                ) : (
+                  platforms.map((platform) => (
+                    <div key={platform.id} className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-lg transition-all duration-200 hover:border-purple-300">
+                      {/* 頂部：標題和編輯按鈕 */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-lg font-bold text-gray-900 mb-1 truncate" title={platform.name}>
+                            {platform.name}
+                          </h4>
+                          <p className="text-xs text-gray-600 line-clamp-1" title={platform.description}>
+                            {platform.description}
+                          </p>
                         </div>
-                      </div>
-                      
-                      {/* 操作按鈕 - 只保留編輯功能 */}
-                      <div className="flex items-center gap-1 ml-3">
                         <button
                           onClick={() => {
                             setEditPlatformForm({
@@ -1344,45 +1491,47 @@ const ChatPlatformManagement: React.FC = () => {
                             });
                             setShowEditPlatform(true);
                           }}
-                          className={`p-2 text-gray-400 hover:${AI_COLORS.text} hover:${AI_COLORS.bgLight} rounded-lg transition-all duration-200`}
+                          className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 ml-2 flex-shrink-0"
                           title="編輯平台"
                         >
                           <Edit size={16} />
                         </button>
                       </div>
+
+                      {/* 代碼區域 */}
+                      <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg mb-3">
+                        <Globe size={14} className="text-gray-400 flex-shrink-0" />
+                        <span className="font-mono text-xs truncate flex-1" title={platform.unique_code}>
+                          代碼: {platform.unique_code}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const chatUrl = createChatUrl(platform.unique_code || '');
+                            navigator.clipboard.writeText(chatUrl);
+                            showSuccess('對話網址已複製到剪貼簿');
+                          }}
+                          className="p-1 text-gray-400 hover:text-purple-600 hover:bg-white rounded transition-colors flex-shrink-0"
+                          title="複製對話網址"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+
+                      {/* AI助手區域 */}
+                      <div className="flex items-center gap-2 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
+                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Bot size={16} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-500">AI助手</p>
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {platform.ai_assistant_name || '未設定'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    
-                                         {/* 卡片底部 - 左右兩個區塊 */}
-                     <div className="grid grid-cols-2 gap-3">
-                       {/* 左側：AI助手狀態 */}
-                       <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                         <div className={`w-8 h-8 ${AI_COLORS.bg} rounded-full flex items-center justify-center`}>
-                           <Bot size={16} className={AI_COLORS.text} />
-                         </div>
-                         <div className="flex-1 min-w-0">
-                           <p className="text-sm font-medium text-gray-700">
-                             {platform.ai_assistant_name || '未設定AI助手'}
-                           </p>
-                         </div>
-                       </div>
-                       
-                       {/* 右側：代碼複製 */}
-                       <div className="flex items-center justify-center p-3 bg-gray-50 rounded-lg">
-                         <button
-                           onClick={() => {
-                             const chatUrl = createChatUrl(platform.unique_code || '');
-                             navigator.clipboard.writeText(chatUrl);
-                             showSuccess('對話網址已複製到剪貼簿');
-                           }}
-                           className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                           title="複製對話網址"
-                         >
-                           <Copy size={20} />
-                         </button>
-                       </div>
-                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -1405,100 +1554,314 @@ const ChatPlatformManagement: React.FC = () => {
                 <p className="text-gray-600">當您管理的客戶開始對話時，會話將顯示在這裡</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {allSessions
-                  .sort((a, b) => {
-                    // 按優先級排序：高 > 中 > 低
-                    const priorityOrder = { high: 3, medium: 2, low: 1 };
-                    return (priorityOrder[b.priority as keyof typeof priorityOrder] || 1) - (priorityOrder[a.priority as keyof typeof priorityOrder] || 1);
-                  })
-                  .map((session) => (
-                    <div
-                      key={`session-${session.session_id || session.id}`}
-                      className="relative bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-all duration-200 cursor-pointer group"
-                      onClick={() => {
-                        console.log('🔄 開始切換對話...');
-                        console.log('🔄 當前對話:', selectedConversationSession?.session_id);
-                        console.log('🔄 目標對話:', session.session_id);
-                        
-                                                 // 先清空當前訊息，強制重新渲染
-                         setConversationMessages([]);
-                         
-                         // 重置 Reply_Token 數量
-                         setReplyTokenCount(0);
-                         
-                         // 設置新的會話
-                         setSelectedConversationSession(session);
-                         setConversationView('chat');
-                         
-                         console.log('✅ 對話已切換，useEffect 將自動載入訊息');
-                      }}
+              <>
+                {/* 平台篩選下拉選單 */}
+                <div className="mb-4 flex items-center gap-3">
+                  <select
+                    value={filterPlatform}
+                    onChange={(e) => setFilterPlatform(e.target.value)}
+                    className="w-24 px-2 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">全部</option>
+                    {uniquePlatforms.map(platformName => (
+                      <option key={platformName} value={platformName}>
+                        {platformName}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* 排序按鈕 */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setSortBy('time')}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        sortBy === 'time' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                     >
-                      {/* 左上：進行中狀態標籤 */}
-                      <div className="absolute top-2 left-2">
-                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium text-white ${getStatusColor(session.status)}`}>
-                          {session.status === 'active' ? '進行中' : 
-                           session.status === 'waiting' ? '等待中' : 
-                           session.status === 'resolved' ? '已解決' : '已升級'}
-                        </span>
-                      </div>
+                      時間
+                    </button>
+                    <button
+                      onClick={() => setSortBy('emotion')}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        sortBy === 'emotion' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      情緒
+                    </button>
+                    <button
+                      onClick={() => setSortBy('urgency')}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        sortBy === 'urgency' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      緊急
+                    </button>
+                    <button
+                      onClick={() => setSortBy('sales')}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        sortBy === 'sales' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      銷售
+                    </button>
+                  </div>
+                </div>
 
-                      {/* 右上：時間 */}
-                      <div className="absolute top-2 right-2">
-                        <span className="text-xs text-gray-500">
-                          {session.last_message?.created_at ? formatRelativeTime(session.last_message.created_at) : '--'}
-                        </span>
-                      </div>
+                <div className="space-y-2">
+                {[...filteredSessions]
+                  .sort((a, b) => {
+                    // 根據選擇的排序方式（移除未讀優先邏輯，改為只在時間排序時考慮）
+                    if (sortBy === 'emotion') {
+                      const aEmotion = a.emotion_stats?.recent_average_emotion || 0;
+                      const bEmotion = b.emotion_stats?.recent_average_emotion || 0;
+                      console.log(`排序情緒: ${a.session_title}: ${aEmotion}, ${b.session_title}: ${bEmotion}`);
+                      return aEmotion - bEmotion; // 負面情緒在前
+                    } else if (sortBy === 'urgency') {
+                      const aUrgency = a.emotion_stats?.recent_average_urgency || 0;
+                      const bUrgency = b.emotion_stats?.recent_average_urgency || 0;
+                      console.log(`排序緊急: ${a.session_title}: ${aUrgency}, ${b.session_title}: ${bUrgency}`);
+                      return bUrgency - aUrgency; // 緊急在前
+                    } else if (sortBy === 'sales') {
+                      const aSales = a.emotion_stats?.recent_average_sales_opportunities || 0;
+                      const bSales = b.emotion_stats?.recent_average_sales_opportunities || 0;
+                      console.log(`排序銷售: ${a.session_title}: ${aSales}, ${b.session_title}: ${bSales}`);
+                      return bSales - aSales; // 高商機在前
+                    } else {
+                      // 時間排序時，未讀訊息優先
+                      const aUnread = a.unread_messages || 0;
+                      const bUnread = b.unread_messages || 0;
+                      if (aUnread !== bUnread) return bUnread - aUnread;
 
-                                              {/* 中間：圓形頭像（外框顏色跟隨優先級） */}
-                        <div className="flex justify-center mt-4 mb-2 relative">
-                          <div className={`w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center border-2 ${
-                            session.priority === 'high' ? 'border-red-500' :
-                            session.priority === 'medium' ? 'border-yellow-500' :
-                            'border-green-500'
-                          }`}>
-                            {(session.platform as any)?.ai_assistant_id ? (
-                              <Bot size={40} className={AI_COLORS.text} />
-                            ) : (
-                              <User size={40} className="text-gray-500" />
+                      const aTime = a.last_message_at || a.created_at || '';
+                      const bTime = b.last_message_at || b.created_at || '';
+                      return bTime.localeCompare(aTime);
+                    }
+                  })
+                  .map((session) => {
+                    const hasUnread = (session.unread_messages || 0) > 0;
+
+                    // 使用 emotion_stats 的最近平均緊急程度
+                    const avgUrgency = session.emotion_stats?.recent_average_urgency || session.last_message?.urgency || 0;
+                    const isUrgent = session.priority === 'high' || avgUrgency >= 8;
+
+                    // 使用 emotion_stats 的最近平均情緒
+                    const displayEmotion = session.emotion_stats?.recent_average_emotion !== undefined
+                      ? Math.round(session.emotion_stats.recent_average_emotion)
+                      : (session.last_message?.emotion || 0);
+
+                    return (
+                      <div
+                        key={`session-${session.session_id || session.id}`}
+                        className={`relative bg-white border-2 rounded-xl p-4 hover:shadow-lg transition-all duration-200 cursor-pointer group ${
+                          hasUnread ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200'
+                        } ${isUrgent ? 'ring-2 ring-red-300' : ''}`}
+                        onClick={() => {
+                          setConversationMessages([]);
+                          setReplyTokenCount(0);
+                          setSelectedConversationSession(session);
+                          setConversationView('chat');
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* 左側:情緒色塊區域 */}
+                          <div className="relative flex-shrink-0 flex flex-col items-center gap-2">
+                            {/* 情緒色塊 - 用顏色漸層表達情緒強度 */}
+                            <div className="relative">
+                              <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-lg transition-all ${
+                                // 根據情緒分數 (-5 到 +5) 決定背景漸層
+                                displayEmotion === 5 ? 'bg-gradient-to-br from-green-400 to-green-600' : // +5 極度正面
+                                displayEmotion === 3 ? 'bg-gradient-to-br from-green-300 to-green-500' : // +3 正面
+                                displayEmotion === 1 ? 'bg-gradient-to-br from-green-200 to-green-400' : // +1 輕微正面
+                                displayEmotion === -5 ? 'bg-gradient-to-br from-red-500 to-red-700 animate-pulse' : // -5 極度負面(閃爍警告)
+                                displayEmotion === -3 ? 'bg-gradient-to-br from-red-400 to-red-600' : // -3 負面
+                                displayEmotion === -1 ? 'bg-gradient-to-br from-orange-300 to-orange-500' : // -1 輕微負面
+                                displayEmotion > 0 ? 'bg-gradient-to-br from-green-200 to-green-400' : // 其他正面
+                                displayEmotion < 0 ? 'bg-gradient-to-br from-orange-400 to-red-500' : // 其他負面
+                                'bg-gradient-to-br from-gray-300 to-gray-400' // 0 中性
+                              }`}>
+                                {/* 表情符號 */}
+                                <span className="text-3xl">
+                                  {displayEmotion === 5 ? '😊' : // +5 極度正面
+                                   displayEmotion === 3 ? '🙂' : // +3 正面
+                                   displayEmotion > 0 ? '😀' : // +1 輕微正面
+                                   displayEmotion === -5 ? '😡' : // -5 極度負面
+                                   displayEmotion === -3 ? '😠' : // -3 負面
+                                   displayEmotion < 0 ? '😟' : // -1 輕微負面
+                                   '😐'} {/* 0 中性 */}
+                                </span>
+                              </div>
+
+                              {/* 未讀訊息徽章 */}
+                              {hasUnread && (
+                                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse ring-2 ring-white">
+                                  {session.unread_messages}
+                                </div>
+                              )}
+
+                              {/* 平台圖標 */}
+                              {session.source_platform && (
+                                <div className="absolute -bottom-2 -left-2">
+                                  <PlatformIcon sourcePlatform={session.source_platform} size="md" />
+                                </div>
+                              )}
+
+                              {/* AI接管狀態 */}
+                              <div className={`absolute -bottom-2 -right-2 rounded-full p-1.5 shadow-md ${
+                                session.manager_info?.ai_takeover ? 'bg-orange-500' : 'bg-gray-400'
+                              }`}>
+                                <Bot size={16} className="text-white" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 中間:對話資訊 */}
+                          <div className="flex-1 min-w-0">
+                            {/* 標題行 */}
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <h3 className={`text-base font-semibold truncate ${hasUnread ? 'text-gray-900' : 'text-gray-700'}`}>
+                                  {(session.session_title || '新對話').replace(/的對話$/, '')}
+                                </h3>
+                                <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 flex-shrink-0">
+                                  {session.platform.name}
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500 flex-shrink-0">
+                                {session.last_message?.created_at ? formatRelativeTime(session.last_message.created_at) : '--'}
+                              </span>
+                            </div>
+
+                            {/* 最後訊息預覽 */}
+                            {session.last_message?.content && (
+                              <p className={`text-xs mb-2 line-clamp-1 ${hasUnread ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                                {session.last_message.sender_type === 'ai' && '🤖 '}
+                                {session.last_message.sender_type === 'agent' && '👤 '}
+                                {session.last_message.content}
+                              </p>
                             )}
+
+                            {/* 狀態標籤行 - 緊湊排列 */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {/* 緊急程度 - 最優先顯示 */}
+                              {isUrgent && (
+                                <span className="px-2 py-1 rounded-md text-xs font-bold bg-red-500 text-white animate-pulse shadow-md">
+                                  🚨 緊急
+                                </span>
+                              )}
+
+                              {/* 情緒趨勢指標 - 用燈號顏色表達情緒強度 */}
+                              {session.emotion_stats && session.emotion_stats.last_emotion !== undefined && (
+                                (() => {
+                                  const avgEmotion = session.emotion_stats.recent_average_emotion || 0;
+                                  const lastEmotion = session.emotion_stats.last_emotion;
+                                  const trend = lastEmotion - avgEmotion;
+
+                                  // 趨勢明顯時才顯示 (變化 >= 1)
+                                  if (Math.abs(trend) >= 1) {
+                                    return (
+                                      <span className="px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 flex items-center gap-1">
+                                        <span className={`w-2 h-2 rounded-full ${
+                                          lastEmotion >= 5 ? 'bg-green-600 animate-pulse' :
+                                          lastEmotion >= 3 ? 'bg-green-500' :
+                                          lastEmotion >= 1 ? 'bg-green-300' :
+                                          lastEmotion === 0 ? 'bg-gray-400' :
+                                          lastEmotion >= -2 ? 'bg-red-300' :
+                                          lastEmotion >= -4 ? 'bg-red-500' :
+                                          'bg-red-600 animate-pulse'
+                                        }`}></span>
+                                        😊{trend > 0 ? '↗' : '↘'}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()
+                              )}
+
+                              {/* 急迫性趨勢指標 - 用燈號顏色表達急迫程度 */}
+                              {session.emotion_stats && session.emotion_stats.last_urgency !== undefined && (
+                                (() => {
+                                  const avgUrgency = session.emotion_stats.recent_average_urgency || 0;
+                                  const lastUrgency = session.emotion_stats.last_urgency;
+                                  const trend = lastUrgency - avgUrgency;
+
+                                  // 趨勢明顯時才顯示 (變化 >= 2)
+                                  if (Math.abs(trend) >= 2) {
+                                    return (
+                                      <span className="px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 flex items-center gap-1">
+                                        <span className={`w-2 h-2 rounded-full ${
+                                          lastUrgency >= 9 ? 'bg-red-600 animate-pulse' :
+                                          lastUrgency >= 7 ? 'bg-red-500' :
+                                          lastUrgency >= 5 ? 'bg-red-400' :
+                                          lastUrgency >= 3 ? 'bg-orange-400' :
+                                          lastUrgency >= 1 ? 'bg-yellow-400' :
+                                          'bg-gray-400'
+                                        }`}></span>
+                                        🚨{trend > 0 ? '↗' : '↘'}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()
+                              )}
+
+                              {/* 業務機會趨勢指標 - 用燈號顏色表達商機程度 */}
+                              {session.emotion_stats && session.emotion_stats.last_sales_opportunities !== undefined && (
+                                (() => {
+                                  const avgSales = session.emotion_stats.recent_average_sales_opportunities || 0;
+                                  const lastSales = session.emotion_stats.last_sales_opportunities;
+                                  const trend = lastSales - avgSales;
+
+                                  // 趨勢明顯時才顯示 (變化 >= 2)
+                                  if (Math.abs(trend) >= 2) {
+                                    return (
+                                      <span className="px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 flex items-center gap-1">
+                                        <span className={`w-2 h-2 rounded-full ${
+                                          lastSales >= 9 ? 'bg-purple-600 animate-pulse' :
+                                          lastSales >= 7 ? 'bg-purple-500' :
+                                          lastSales >= 5 ? 'bg-purple-400' :
+                                          lastSales >= 3 ? 'bg-purple-300' :
+                                          lastSales >= 1 ? 'bg-purple-200' :
+                                          'bg-gray-400'
+                                        }`}></span>
+                                        💰{trend > 0 ? '↗' : '↘'}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()
+                              )}
+
+                              {/* 優先級 - 只顯示高和中 */}
+                              {session.priority === 'high' && (
+                                <span className="px-2 py-1 rounded-md text-xs font-medium bg-red-100 text-red-800">
+                                  高優先
+                                </span>
+                              )}
+                              {session.priority === 'medium' && (
+                                <span className="px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  中優先
+                                </span>
+                              )}
+
+                              {/* 對話狀態 - 只顯示非進行中的狀態 */}
+                              {session.status !== 'active' && (
+                                <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                                  session.status === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
+                                  session.status === 'resolved' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {session.status === 'waiting' ? '等待中' :
+                                   session.status === 'resolved' ? '已解決' : '已升級'}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        
-                        {/* 人數：浮水印方式，在人像右下方 */}
-                        <div className="absolute bottom-6 right-0 bg-black/20 text-white text-xs font-bold rounded-full px-1 py-1 flex items-center justify-center backdrop-blur-sm z-10">
-                          × {(session as any).session_users?.length || 1} 人
-                        </div>
-                        
-                        {/* 平台圖標：放在頭像左下角 */}
-                        {session.source_platform && (
-                          <div className="absolute -bottom-1 -left+5">
-                            <PlatformIcon sourcePlatform={session.source_platform} size="sm" />
-                          </div>
-                        )}
-                        
-                        {/* 機器人狀態：放在平台圖標右邊 */}
-                        <div className="absolute -bottom-1 left-1">
-                          <Bot 
-                            size={22} 
-                            className={`${
-                              session.manager_info?.ai_takeover ? AI_COLORS.text : 'text-gray-400'
-                            }`}
-                          />
                         </div>
                       </div>
-
-                      {/* 圖像下方：Label */}
-                      <div className="text-center mb-0">
-                        <span className="text-xs text-gray-700 font-medium">
-                          {session.session_title || '新對話'}
-                        </span>
-                      </div>
-
-                      {/* 懸停時的邊框效果 */}
-                      <div className={`absolute inset-0 rounded-lg border-2 border-transparent group-hover:${AI_COLORS.border} transition-colors pointer-events-none`}></div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
+              </>
             )}
 
             {/* 聊天界面 - 全屏覆蓋，和訪客端一樣 */}
@@ -1597,15 +1960,14 @@ const ChatPlatformManagement: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(selectedConversationSession.priority)}`}>
-                      {selectedConversationSession.priority === 'high' ? '高' : 
-                       selectedConversationSession.priority === 'medium' ? '中' : '低'} 優先級
-                    </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getStatusColor(selectedConversationSession.status)}`}>
-                      {selectedConversationSession.status === 'active' ? '進行中' : 
-                       selectedConversationSession.status === 'waiting' ? '等待中' : 
-                       selectedConversationSession.status === 'resolved' ? '已解決' : '已升級'}
-                    </span>
+                    <button
+                      onClick={() => setShowSummaryList(true)}
+                      className={`px-3 py-2 ${AI_COLORS.bg} ${AI_COLORS.text} rounded-lg hover:opacity-80 transition-colors shadow-sm flex items-center gap-2`}
+                      title="查看對話摘要"
+                    >
+                      <FileText size={16} />
+                      <span className="text-sm font-medium">摘要</span>
+                    </button>
                     <button
                       onClick={() => {
                         setConversationView('list');
@@ -1844,6 +2206,11 @@ const ChatPlatformManagement: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-ai-500 focus:border-transparent"
                 >
                   <option value="">選擇AI助手（可選）</option>
+                  {aiAssistants.map(assistant => (
+                    <option key={assistant.id} value={assistant.id}>
+                      {assistant.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1914,6 +2281,11 @@ const ChatPlatformManagement: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-ai-500 focus:border-transparent"
                 >
                   <option value="">選擇AI助手（可選）</option>
+                  {aiAssistants.map(assistant => (
+                    <option key={assistant.id} value={assistant.id}>
+                      {assistant.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1940,6 +2312,148 @@ const ChatPlatformManagement: React.FC = () => {
                 className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-md transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed`}
               >
                 更新
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary 列表彈窗 */}
+      {showSummaryList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            {/* 標題欄 */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <FileText size={24} className={AI_COLORS.text} />
+                  對話摘要列表
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  共 {conversationMessages.length} 則訊息，
+                  {conversationMessages.filter(msg => msg.summary && msg.summary.trim() !== '').length} 則有摘要
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSummaryList(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                title="關閉"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 摘要列表內容 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {(() => {
+                // 篩選出有 summary 的訊息
+                console.log('🔍 所有對話訊息數量:', conversationMessages.length);
+                console.log('🔍 訊息範例（前3條）:', conversationMessages.slice(0, 3));
+                
+                // 檢查每條訊息的 summary 欄位
+                conversationMessages.forEach((msg, idx) => {
+                  if (idx < 5) { // 只檢查前5條
+                    console.log(`🔍 訊息 ${idx + 1}:`, {
+                      id: msg.id,
+                      content: (msg.content || msg.message || '').substring(0, 20),
+                      summary: msg.summary,
+                      hasSummary: !!msg.summary,
+                      timestamp: msg.timestamp,
+                      created_at: msg.created_at
+                    });
+                  }
+                });
+                
+                const messagesWithSummary = conversationMessages.filter(msg => {
+                  const hasSummary = msg.summary && msg.summary.trim() !== '';
+                  if (hasSummary) {
+                    console.log('✅ 找到有摘要的訊息:', { id: msg.id, summary: msg.summary });
+                  }
+                  return hasSummary;
+                });
+                
+                console.log('🔍 有摘要的訊息數量:', messagesWithSummary.length);
+                
+                if (messagesWithSummary.length === 0) {
+                  return (
+                    <div className="text-center py-16">
+                      <div className="bg-gray-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                        <FileText size={40} className="text-gray-400" />
+                      </div>
+                      <p className="text-gray-700 text-lg font-medium mb-2">目前沒有對話摘要</p>
+                      <p className="text-gray-500 text-sm">當有客戶訊息包含摘要時，會顯示在這裡</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {messagesWithSummary.map((message, index) => {
+                      // 優先使用 created_at，其次 timestamp
+                      const timeValue = message.created_at || message.timestamp;
+                      const displayTime = timeValue ? formatChatTime(timeValue) : '時間未知';
+                      const displayDate = timeValue ? formatDate(timeValue) : '';
+                      
+                      console.log('🔍 摘要訊息時間:', {
+                        id: message.id,
+                        created_at: message.created_at,
+                        timestamp: message.timestamp,
+                        timeValue,
+                        displayTime,
+                        displayDate
+                      });
+                      
+                      return (
+                        <div 
+                          key={message.id} 
+                          className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors border border-gray-200"
+                        >
+                          {/* 時間標籤 */}
+                          <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                            <Clock size={14} />
+                            <span>
+                              {displayDate && `${displayDate} `}
+                              {displayTime}
+                            </span>
+                            <span className="mx-1">•</span>
+                            <span className={`px-2 py-0.5 rounded-full ${
+                              message.sender_type === 'member' || message.sender_type === 'customer' 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : message.sender_type === 'ai' 
+                                ? 'bg-purple-100 text-purple-700' 
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {message.sender_type === 'member' || message.sender_type === 'customer' ? '客戶' : 
+                               message.sender_type === 'ai' ? 'AI' : 
+                               message.sender_type === 'agent' ? '客服' : '系統'}
+                            </span>
+                          </div>
+                          
+                          {/* 摘要內容 */}
+                          <div className="text-sm text-gray-800 font-medium mb-2">
+                            📝 {message.summary}
+                          </div>
+                          
+                          {/* 原始訊息 */}
+                          <div className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-300">
+                            <span className="font-semibold">原始訊息：</span>
+                            <span className="ml-1">{message.content || message.message || '（無內容）'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 底部按鈕 */}
+            <div className="p-4 border-t border-gray-200">
+              <button
+                onClick={() => setShowSummaryList(false)}
+                className="w-full px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                關閉
               </button>
             </div>
           </div>
