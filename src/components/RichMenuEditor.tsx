@@ -479,9 +479,11 @@ const RichMenuEditor: React.FC<RichMenuEditorProps> = ({ isOpen, onClose, botId,
         return;
       }
 
-      // 準備區域數據
-      const allAreas = pages.flatMap(page => convertAreasToApiFormat(page.areas));
+      // 準備區域數據 - 只取當前頁面的區域,避免累積重複數據
+      const currentPageData = pages.find(page => page.id === currentPageId);
+      const allAreas = currentPageData ? convertAreasToApiFormat(currentPageData.areas) : [];
       console.log('準備的區域數據:', allAreas);
+      console.log('當前頁面:', currentPageData);
 
       const menuData = {
         bot_bid: botId,
@@ -549,10 +551,12 @@ const RichMenuEditor: React.FC<RichMenuEditorProps> = ({ isOpen, onClose, botId,
 
     try {
       setSaving(true);
-      
-      // 準備區域數據
-      const allAreas = pages.flatMap(page => convertAreasToApiFormat(page.areas));
+
+      // 準備區域數據 - 只取當前頁面的區域,避免累積重複數據
+      const currentPageData = pages.find(page => page.id === currentPageId);
+      const allAreas = currentPageData ? convertAreasToApiFormat(currentPageData.areas) : [];
       console.log('準備更新的區域數據:', allAreas);
+      console.log('當前頁面:', currentPageData);
 
       // 只更新區域設定
       await richMenuApi.updateAreas(selectedMenuId, allAreas);

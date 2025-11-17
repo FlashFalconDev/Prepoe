@@ -41,8 +41,11 @@ interface AudienceProfile {
   ageRange: [number, number];
   profession: string;
   tone: 'professional' | 'casual' | 'friendly' | 'energetic';
-  duration: number; // 時間長度（秒），預設60秒
+  duration: number; // 時間長度（秒），預設10秒
 }
+
+// 時間長度選項 (秒)
+const DURATION_OPTIONS = [10, 30, 60, 180, 600]; // 10秒, 30秒, 1分鐘, 3分鐘, 10分鐘
 
 // 對話內容接口（擴增模式使用）
 interface DialogueItem {
@@ -115,8 +118,7 @@ const AIAudio: React.FC = () => {
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [uploadMode, setUploadMode] = useState<'record' | 'upload'>('record'); // 'record' 或 'upload'
-  const [voiceNameMode, setVoiceNameMode] = useState<'model' | 'content'>('model'); // 'model' 或 'content'
-  
+
   // AI文案助手相關狀態
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [audienceProfile, setAudienceProfile] = useState<AudienceProfile>({
@@ -124,7 +126,7 @@ const AIAudio: React.FC = () => {
     ageRange: [25, 35],
     profession: '',
     tone: 'professional',
-    duration: 60 // 預設60秒
+    duration: 10 // 預設10秒
   });
   const [copywritingOutline, setCopywritingOutline] = useState('');
   const [isGeneratingCopywriting, setIsGeneratingCopywriting] = useState(false);
@@ -441,8 +443,8 @@ const AIAudio: React.FC = () => {
       const formData = new FormData();
       formData.append('wav_file', audioBlob, `${newVoiceName}.webm`);
       formData.append('model_note', newVoiceName);
-      formData.append('model_text', voiceNameMode === 'model' ? readingText : title);
-      formData.append('is_model_mode', voiceNameMode === 'model' ? 'true' : 'false');
+      formData.append('model_text', readingText);
+      formData.append('is_model_mode', 'true');
 
       const proxyUrl = API_ENDPOINTS.UPLOAD_WAV;
       
@@ -473,7 +475,7 @@ const AIAudio: React.FC = () => {
         setCustomVoiceModels(prev => [...prev, newModel]);
         setSelectedVoiceModel(newModel.id);
         setUploadMessage('✅ 聲音模型建立成功！');
-        
+
         setTimeout(() => {
           setShowVoiceRecording(false);
           resetVoiceRecording();
@@ -497,7 +499,6 @@ const AIAudio: React.FC = () => {
     setIsUploading(false);
     setUploadedFileName('');
     setUploadMode('record');
-    setVoiceNameMode('model');
   };
 
   // 處理音頻檔案上傳
@@ -2179,7 +2180,7 @@ const AIAudio: React.FC = () => {
         <div className={`w-14 h-14 ${AI_COLORS.bg} rounded-full flex items-center justify-center mb-3`}>
           <Plus size={28} className={AI_COLORS.text} />
         </div>
-        <h4 className={`font-semibold ${AI_COLORS.text} mb-1`}>新增語音模型</h4>
+        <h4 className={`font-semibold ${AI_COLORS.text} mb-1`}>錄製語音模型</h4>
         <p className="text-sm text-gray-600">錄製專屬語音</p>
       </div>
     </div>
@@ -2202,13 +2203,6 @@ const AIAudio: React.FC = () => {
     };
   }, []);
 
-  // 監聽內容模式切換，自動更新語音模型名稱
-  useEffect(() => {
-    if (voiceNameMode === 'content' && title) {
-      setNewVoiceName(title);
-    }
-  }, [voiceNameMode, title]);
-
   // 初始化說話人順序
   useEffect(() => {
     if (speakerCount > 0) {
@@ -2217,12 +2211,11 @@ const AIAudio: React.FC = () => {
     }
   }, [speakerCount]);
 
-  // 根據語音模型名稱模式返回錄音時長限制（秒）
+  // 錄音時長限制（秒）
   const getMaxRecordingTime = () => {
-    return voiceNameMode === 'content' ? 600 : 20;
+    return 20;
   };
 
-  // 最短錄音時長限制（秒）
   const getMinRecordingTime = () => {
     return 5;
   };
@@ -2330,35 +2323,35 @@ const AIAudio: React.FC = () => {
           </button>
 
           {/* 模式選擇卡片 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-2 gap-4 md:gap-8">
             {/* 基礎模式 */}
             <div
               onClick={() => setCreationMode('basic')}
-              className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-blue-500 group"
+              className="bg-white rounded-2xl p-4 md:p-8 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-blue-500 group"
             >
               <div className="text-center">
-                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                  <FileAudio size={40} className="text-blue-600" />
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 group-hover:scale-110 transition-transform">
+                  <FileAudio size={32} className="text-blue-600 md:w-10 md:h-10" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">基礎模式</h3>
-                <p className="text-gray-600 mb-6">標準音頻創作流程，適合一般用途</p>
+                <h3 className="text-lg md:text-2xl font-bold text-gray-900 mb-2 md:mb-3">基礎模式</h3>
+                <p className="text-xs md:text-base text-gray-600 mb-4 md:mb-6">標準音頻創作流程</p>
 
-                <div className="text-left space-y-3 mb-6">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700">單一語音模型</span>
+                <div className="text-left space-y-2 md:space-y-3 mb-4 md:mb-6">
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5 md:w-5 md:h-5" />
+                    <span className="text-xs md:text-sm text-gray-700">單一語音模型</span>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700">情緒調整選項</span>
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5 md:w-5 md:h-5" />
+                    <span className="text-xs md:text-sm text-gray-700">情緒調整選項</span>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700">快速生成</span>
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5 md:w-5 md:h-5" />
+                    <span className="text-xs md:text-sm text-gray-700">快速生成</span>
                   </div>
                 </div>
 
-                <div className={`px-4 py-2 ${AI_COLORS.bg} ${AI_COLORS.text} rounded-lg font-semibold group-hover:shadow-md transition-shadow`}>
+                <div className={`px-3 md:px-4 py-2 ${AI_COLORS.bg} ${AI_COLORS.text} rounded-lg text-sm md:text-base font-semibold group-hover:shadow-md transition-shadow`}>
                   選擇基礎模式
                 </div>
               </div>
@@ -2370,47 +2363,47 @@ const AIAudio: React.FC = () => {
                 setCreationMode('enhanced');
                 setEmotionMode('auto'); // 預設自動模式
               }}
-              className={`bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent ${ENHANCED_COLORS.hover.border} group relative overflow-hidden`}
+              className={`bg-white rounded-2xl p-4 md:p-8 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent ${ENHANCED_COLORS.hover.border} group relative overflow-hidden`}
             >
+              {/* 字幕徽章 - 右上角 */}
+              <span className={`absolute top-3 right-3 md:top-4 md:right-4 px-1.5 md:px-2 py-0.5 md:py-1 ${ENHANCED_COLORS.gradient} text-white text-xs font-bold rounded-full z-20`}>字幕</span>
+
               {/* 漸變背景 */}
               <div className={`absolute top-0 right-0 w-32 h-32 ${ENHANCED_COLORS.gradientLight} rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-150 transition-transform duration-500`}></div>
 
               <div className="text-center relative z-10">
-                <div className={`w-20 h-20 ${ENHANCED_COLORS.gradientLight} rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform`}>
-                  <Users size={40} className={ENHANCED_COLORS.text} />
+                <div className={`w-16 h-16 md:w-20 md:h-20 ${ENHANCED_COLORS.gradientLight} rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 group-hover:scale-110 transition-transform`}>
+                  <Users size={32} className={`${ENHANCED_COLORS.text} md:w-10 md:h-10`} />
                 </div>
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <h3 className="text-2xl font-bold text-gray-900">擴增模式</h3>
-                  <span className={`px-2 py-1 ${ENHANCED_COLORS.gradient} text-white text-xs font-bold rounded-full`}>字幕</span>
-                </div>
-                <p className="text-gray-600 mb-6">支援多人語音與字幕生成</p>
+                <h3 className="text-lg md:text-2xl font-bold text-gray-900 mb-2 md:mb-3">擴增模式</h3>
+                <p className="text-xs md:text-base text-gray-600 mb-4 md:mb-6">支援多人語音與字幕生成</p>
 
-                <div className="text-left space-y-3 mb-6">
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={20} className={`${ENHANCED_COLORS.iconLight} flex-shrink-0 mt-0.5`} />
-                    <span className="text-sm text-gray-700">最多4人語音模型</span>
+                <div className="text-left space-y-2 md:space-y-3 mb-4 md:mb-6">
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <Sparkles size={16} className={`${ENHANCED_COLORS.iconLight} flex-shrink-0 mt-0.5 md:w-5 md:h-5`} />
+                    <span className="text-xs md:text-sm text-gray-700">最多4人語音模型</span>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={20} className={`${ENHANCED_COLORS.iconLight} flex-shrink-0 mt-0.5`} />
-                    <span className="text-sm text-gray-700">AI自動情緒分析</span>
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <Sparkles size={16} className={`${ENHANCED_COLORS.iconLight} flex-shrink-0 mt-0.5 md:w-5 md:h-5`} />
+                    <span className="text-xs md:text-sm text-gray-700">AI自動情緒分析</span>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={20} className={`${ENHANCED_COLORS.iconLight} flex-shrink-0 mt-0.5`} />
-                    <span className="text-sm text-gray-700">智能字幕生成</span>
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <Sparkles size={16} className={`${ENHANCED_COLORS.iconLight} flex-shrink-0 mt-0.5 md:w-5 md:h-5`} />
+                    <span className="text-xs md:text-sm text-gray-700">智能字幕生成</span>
                   </div>
                 </div>
 
-                <div className={`px-4 py-2 ${ENHANCED_COLORS.buttonGradient} rounded-lg font-semibold group-hover:shadow-md transition-shadow`}>
+                <div className={`px-3 md:px-4 py-2 ${ENHANCED_COLORS.buttonGradient} rounded-lg text-sm md:text-base font-semibold group-hover:shadow-md transition-shadow`}>
                   選擇擴增模式
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 我的音頻創作記錄 */}
+          {/* 音頻記錄 */}
           <div className="mt-12">
             <div className="flex items-center justify-between mb-6">
-              <h4 className="text-2xl font-bold text-gray-900">我的音頻創作記錄</h4>
+              <h4 className="text-2xl font-bold text-gray-900">音頻記錄</h4>
               <div className="flex items-center gap-3">
                 {showSoundCloneList && (
                   <button
@@ -2697,62 +2690,23 @@ const AIAudio: React.FC = () => {
 
             <div className="p-6 space-y-6">
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-semibold text-gray-900">語音模型名稱</label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setVoiceNameMode('model');
-                        setNewVoiceName('');
-                      }}
-                      disabled={isUploading || isRecording}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        voiceNameMode === 'model'
-                          ? `${AI_COLORS.bgDark} text-white`
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      } ${(isUploading || isRecording) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      模型
-                    </button>
-                    <button
-                      onClick={() => {
-                        setVoiceNameMode('content');
-                        setNewVoiceName(title || '');
-                      }}
-                      disabled={isUploading || isRecording || !title}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        voiceNameMode === 'content'
-                          ? `${AI_COLORS.bgDark} text-white`
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      } ${(isUploading || isRecording || !title) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      內容
-                    </button>
-                  </div>
-                </div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">語音模型名稱</label>
                 <input
                   type="text"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-ai-500 focus:border-transparent"
-                  placeholder={voiceNameMode === 'model' ? '輸入語音模型名稱...' : '自動使用音頻標題'}
+                  placeholder="輸入語音模型名稱..."
                   value={newVoiceName}
                   onChange={(e) => setNewVoiceName(e.target.value)}
-                  disabled={isUploading || voiceNameMode === 'content'}
+                  disabled={isUploading}
                 />
-                {voiceNameMode === 'content' && (
-                  <p className="mt-2 text-xs text-gray-500">
-                    💡 使用音頻標題「{title}」作為語音模型名稱
-                  </p>
-                )}
               </div>
 
-              {voiceNameMode === 'model' && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">建議朗讀文本</label>
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                    <p className="text-gray-700 leading-relaxed">{readingText}</p>
-                  </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">建議朗讀文本</label>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-gray-700 leading-relaxed">{readingText}</p>
                 </div>
-              )}
+              </div>
 
               <div>
                 {/* 標題和切換按鈕 */}
@@ -2912,7 +2866,7 @@ const AIAudio: React.FC = () => {
                       <li>• 保持與麥克風適當距離</li>
                       <li>• 語速適中，發音清晰</li>
                       <li>• 建議錄音時長 {getMinRecordingTime()}-{getMaxRecordingTime()} 秒</li>
-                      {voiceNameMode === 'model' && <li>• 請完整朗讀建議文本</li>}
+                      <li>• 請完整朗讀建議文本</li>
                     </ul>
                   ) : (
                     <ul className="space-y-1">
@@ -2920,7 +2874,7 @@ const AIAudio: React.FC = () => {
                       <li>• 檔案大小：最大 10MB</li>
                       <li>• 音頻時長：{getMinRecordingTime()}-{getMaxRecordingTime()} 秒</li>
                       <li>• 建議使用高品質音頻</li>
-                      {voiceNameMode === 'model' && <li>• 內容應符合建議朗讀文本</li>}
+                      <li>• 內容應符合建議朗讀文本</li>
                     </ul>
                   )}
                 </div>
@@ -3298,23 +3252,29 @@ const AIAudio: React.FC = () => {
                     <span className="text-sm text-gray-600">目標時長</span>
                     <span className="text-lg font-semibold text-purple-600">
                       {audienceProfile.duration >= 60
-                        ? `${Math.floor(audienceProfile.duration / 60)} 分 ${audienceProfile.duration % 60 > 0 ? `${audienceProfile.duration % 60} 秒` : ''}`
+                        ? `${audienceProfile.duration / 60} 分鐘`
                         : `${audienceProfile.duration} 秒`}
                     </span>
                   </div>
                   <input
                     type="range"
-                    min="30"
-                    max="1800"
-                    step="30"
-                    value={audienceProfile.duration}
-                    onChange={(e) => setAudienceProfile(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
+                    min="0"
+                    max="4"
+                    step="1"
+                    value={DURATION_OPTIONS.indexOf(audienceProfile.duration)}
+                    onChange={(e) => {
+                      const index = parseInt(e.target.value);
+                      setAudienceProfile(prev => ({ ...prev, duration: DURATION_OPTIONS[index] }));
+                    }}
                     disabled={isGeneratingCopywriting}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-2">
+                    <span>10秒</span>
                     <span>30秒</span>
-                    <span>30分鐘</span>
+                    <span>1分鐘</span>
+                    <span>3分鐘</span>
+                    <span>10分鐘</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-3 text-center">
                     ⚠️ 實際時長會依據所選模型而有所誤差

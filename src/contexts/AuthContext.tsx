@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { getProtectedData, logout as logoutApi, getFeatureFlag } from '../config/api';
 
 interface FeatureFlag {
@@ -14,7 +14,8 @@ interface User {
   id: number;
   username: string;
   email?: string;
-  member_card_id?: number;
+  member_card?: number; // API 返回的 member_card 欄位
+  member_card_id?: number; // 保留向後兼容
   is_superuser?: boolean; // 系統管理員標識
   role?: string; // 用戶角色（如 "admin"）
 }
@@ -49,9 +50,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [featureFlag, setFeatureFlag] = useState<FeatureFlag | undefined>(undefined);
 
+  // 使用 ref 來追蹤是否已經檢查過認證，防止重複請求
+  const hasCheckedAuthRef = useRef(false);
+  const isCheckingAuthRef = useRef(false);
+
   const login = (userData: User) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    // 重置認證檢查標記,以便可以重新檢查並獲取完整的用戶資料
+    hasCheckedAuthRef.current = false;
+    // 使用 setTimeout 來確保 checkAuth 在當前執行上下文之後執行
+    setTimeout(() => {
+      checkAuth();
+    }, 0);
   };
 
   const logout = async () => {
@@ -63,35 +74,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setFeatureFlag(undefined);
       localStorage.removeItem('user');
+      hasCheckedAuthRef.current = false; // 重置認證檢查標記
     }
   };
 
   const checkAuth = useCallback(async () => {
+    // 防止重複請求 - 檢查是否已檢查過或正在檢查中
+    if (hasCheckedAuthRef.current || isCheckingAuthRef.current) {
+      console.log('⚠️ 認證已檢查或正在檢查中，跳過重複請求');
+      return;
+    }
+
     try {
-      const response = await getProtectedData();
+      isCheckingAuthRef.current = true; // 立即標記為檢查中
+
+      // 從 URL 查詢參數中獲取 referrer
+      const urlParams = new URLSearchParams(window.location.search);
+      const referrer = urlParams.get('referrer');
+
+      const response = await getProtectedData(referrer || undefined);
       if (response.status === 200) {
         // 如果API返回用戶資訊，使用API的資料
         if (response.data.user) {
-          // 確保用戶對象包含 member_card_id
-          const userData = {
-            ...response.data.user,
-            member_card_id: response.data.user.member_card_id || response.data.user.id // 如果沒有member_card_id，使用id作為備用
-          };
+          // 直接使用 API 返回的用戶資料,保持原始結構
+          const userData = response.data.user;
           setUser(userData);
           // 設置 feature_flag
           const ff = response.data.session_info?.session_data?.feature_flag;
           if (ff) setFeatureFlag(ff);
           localStorage.setItem('user', JSON.stringify(userData));
+          hasCheckedAuthRef.current = true; // 標記為已檢查
           console.log('從API獲取用戶資料:', userData);
         } else {
           // 否則嘗試從localStorage恢復
           const savedUser = localStorage.getItem('user');
           if (savedUser) {
             const parsedUser = JSON.parse(savedUser);
-            // 確保從localStorage恢復的用戶也有member_card_id
-            if (!parsedUser.member_card_id) {
-              parsedUser.member_card_id = parsedUser.id;
-            }
             setUser(parsedUser);
             console.log('從localStorage恢復用戶資料:', parsedUser);
           }
@@ -105,6 +123,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.removeItem('user');
     } finally {
       setIsLoading(false);
+      isCheckingAuthRef.current = false;
     }
   }, []);
 
@@ -128,7 +147,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    checkAuth();
+    if (!hasCheckedAuthRef.current && !isCheckingAuthRef.current) {
+      checkAuth();
+    }
   }, [checkAuth]);
 
   const value: AuthContextType = {

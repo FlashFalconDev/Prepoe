@@ -73,9 +73,16 @@ export const createCardUrl = (slug: string): string => {
 };
 
 // 建立活動報名連結
-export const createEventJoinUrl = (sku: string): string => {
-  // 使用相對路徑避免 URL 重複問題
-  return `/client/event/join/${sku}`;
+export const createEventJoinUrl = (sku: string, referrerId?: number): string => {
+  // 使用完整 URL 讓使用者可以複製完整連結
+  const baseUrl = `${APP_BASE}/client/event/join/${sku}`;
+
+  // 如果提供 referrerId，則加入查詢參數
+  if (referrerId !== undefined) {
+    return `${baseUrl}?referrer=${referrerId}`;
+  }
+
+  return baseUrl;
 };
 
 export const API_ENDPOINTS = {
@@ -111,6 +118,7 @@ export const API_ENDPOINTS = {
   FACEBOOK_LOGIN: `${API_BASE}/api/auth/facebook/`,
   APPLE_LOGIN: `${API_BASE}/api/auth/apple/`,
   THIRD_PARTY_CALLBACK: `${API_BASE}/api/auth/callback/`,
+  THIRD_PARTY_CALLBACK_WITH_PROVIDER: (provider: string) => `${API_BASE}/api/auth/callback/${provider}/`,
   BUSINESS_CARD: `${API_BASE}/pp/api/business_card/`,
   SAVE_BUSINESS_CARD: `${API_BASE}/pp/api/save-profile/`,
   PUBLIC_BUSINESS_CARD: (slug: string) => `${API_BASE}/pp/api/get_business_card/${slug}/`,
@@ -129,7 +137,8 @@ export const API_ENDPOINTS = {
   PUBLIC_ARTICLE: (slug: string) => `${API_BASE}/article/public/articles/${slug}/`,
   TAGS: `${API_BASE}/article/api/tags/`,
   UPLOAD_MEDIA: `${API_BASE}/article/api/upload-media/`,
-  
+  UPLOAD_FILE: `${API_BASE}/api/upload_file/`,
+
   // AI客服相關 API
   AI_ASSISTANTS: `${API_BASE}/airag/api/assistants/`,
   AI_ASSISTANT_CREATE: `${API_BASE}/airag/api/assistants/create/`,
@@ -209,6 +218,9 @@ export const API_ENDPOINTS = {
   EVENT_MODULE_CREATE: `${API_BASE}/itemevent/api/modules/create/`,
   EVENT_MODULE_UPDATE: (moduleId: number) => `${API_BASE}/itemevent/api/modules/${moduleId}/`,
   EVENT_MODULE_DELETE: (moduleId: number) => `${API_BASE}/itemevent/api/modules/${moduleId}/`,
+
+  // 視圖內容相關 API (未來實作)
+  VIEW_CONTENT: `${API_BASE}/api/view_content/`,
   
   // EventItem CRUD API
   EVENT_ITEMS: `${API_BASE}/itemevent/api/events/`,
@@ -216,7 +228,14 @@ export const API_ENDPOINTS = {
   EVENT_ITEM_CREATE: `${API_BASE}/itemevent/api/events/create/`,
   EVENT_ITEM_UPDATE: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/update/`,
   EVENT_ITEM_DELETE: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/delete/`,
-  
+
+  // ItemImage CRUD API（活動其他圖片管理）
+  EVENT_IMAGES: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/images/`,
+  EVENT_IMAGE_CREATE: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/images/create/`,
+  EVENT_IMAGE_UPDATE: (imageId: number) => `${API_BASE}/itemevent/api/images/${imageId}/update/`,
+  EVENT_IMAGE_DELETE: (imageId: number) => `${API_BASE}/itemevent/api/images/${imageId}/delete/`,
+  EVENT_IMAGE_REORDER: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/images/reorder/`,
+
   // EventModuleAssignment CRUD API
   EVENT_MODULE_ASSIGNMENTS: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/modules/`,
   EVENT_MODULE_ASSIGNMENT_CREATE: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/modules/create/`,
@@ -226,6 +245,9 @@ export const API_ENDPOINTS = {
   
   // EventOrderDetail CRUD API
   EVENT_ORDERS: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/orders/`,
+
+  // 訂單創建 API（用於活動報名支付）
+  CREATE_ORDER: `${API_BASE}/item/api/create_order/`,
   
   // EventParticipant CRUD API
   EVENT_PARTICIPANTS: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/participants/`,
@@ -237,12 +259,25 @@ export const API_ENDPOINTS = {
   
   // 活動報名相關 API
   EVENT_JOIN_INFO: (sku: string) => `${API_BASE}/itemevent/api/events_sku/${sku}/`,
-  EVENT_REGISTRATION_SUBMIT: (sku: string) => `${API_BASE}/itemevent/api/events/join/${sku}/submit/`,
+  EVENT_REGISTRATION_SUBMIT: (sku: string) => `${API_BASE}/itemevent/api/events_sku/${sku}/join/`,
   // 活動列表 API（不篩查使用者）
   EVENT_SKU_LIST: () => `${API_BASE}/itemevent/api/events_sku/`,
   EVENT_STATISTICS: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/statistics/`,
   EVENT_STATISTICS_REFRESH: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/statistics/refresh/`,
-  
+
+  // 表單欄位 API
+  EVENT_FORM_FIELDS_BATCH_CREATE: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/form-fields/batch-create/`,
+  EVENT_FORM_FIELDS_SYNC: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/form-fields/sync/`,
+  EVENT_FORM_FIELDS_GET: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/form-fields/`,
+
+  // 推薦訂單 API
+  REFERRER_ORDERS: `${API_BASE}/item/api/referrer_order/`,
+  // 我的訂單 API
+  MY_ORDERS: `${API_BASE}/itemevent/api/events/my_order/`,
+
+  // 付款相關 API
+  PAY_ORDER: (orderPk: number, paymentMethod: string) => `${API_BASE}/item/api/pay_order/${orderPk}/${paymentMethod}/`,
+
   // Public Event API
   PUBLIC_EVENT_DETAIL: (eventId: number) => `${API_BASE}/itemevent/api/public/events/${eventId}/`,
   PUBLIC_EVENT_SEARCH: `${API_BASE}/itemevent/api/public/events/search/`,
@@ -410,11 +445,17 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    console.error('API Error:', error);
-    
+    console.error('=== API Error 詳細資訊 ===');
+    console.error('URL:', error.config?.url);
+    console.error('Method:', error.config?.method);
+    console.error('Status:', error.response?.status);
+    console.error('錯誤訊息:', error.response?.data);
+    console.error('完整錯誤:', error);
+
     if (error.response?.status === 401) {
-      // 未授權，可能需要重新登入
-      console.log('需要重新登入');
+      // 未授權,可能需要重新登入
+      console.error('❌ 401 未授權錯誤 - 需要重新登入或授權失敗');
+      console.error('後端回應:', error.response?.data);
     } else if (error.response?.status === 403) {
       // CSRF token錯誤，嘗試重新獲取
       console.error('CSRF token錯誤，嘗試重新獲取...');
@@ -508,7 +549,11 @@ export const refreshCSRFToken = async () => {
 export const login = (username: string, password: string) =>
   api.post(API_ENDPOINTS.LOGIN, { username, password });
 export const logout = () => api.post(API_ENDPOINTS.LOGOUT);
-export const getProtectedData = () => api.get(API_ENDPOINTS.PROTECTED);
+export const getProtectedData = (referrer?: string | number) => {
+  // 如果提供 referrer，則加入查詢參數
+  const params = referrer ? { referrer: String(referrer) } : {};
+  return api.get(API_ENDPOINTS.PROTECTED, { params });
+};
 export const getFeatureFlag = () => api.get(API_ENDPOINTS.FEATURE_FLAG);
 
 // 第三方登入相關 API 呼叫函式
@@ -516,11 +561,49 @@ export const initiateGoogleLogin = () => api.get(API_ENDPOINTS.GOOGLE_LOGIN);
 export const initiateLineLogin = () => api.get(API_ENDPOINTS.LINE_LOGIN);
 export const initiateFacebookLogin = () => api.get(API_ENDPOINTS.FACEBOOK_LOGIN);
 export const initiateAppleLogin = () => api.get(API_ENDPOINTS.APPLE_LOGIN);
-export const handleThirdPartyCallback = (code: string, state: string, provider: string) =>
-  api.post(
-    API_ENDPOINTS.THIRD_PARTY_CALLBACK,
-    { code, state, provider }
-  );
+export const handleThirdPartyCallback = async (code: string, state: string, provider: string) => {
+  const clientSid = localStorage.getItem('client_sid') || import.meta.env.VITE_CLIENT_SID || 'prepoe';
+
+  console.log('=== 發送第三方登入回調請求 ===');
+  console.log('Provider:', provider);
+  console.log('Client SID:', clientSid);
+  console.log('Code length:', code.length);
+  console.log('State:', state);
+
+  // 嘗試方法1: provider 在 URL 路徑中 (/api/auth/callback/line/)
+  try {
+    console.log('嘗試方法1: /api/auth/callback/' + provider + '/');
+    const response = await api.post(
+      API_ENDPOINTS.THIRD_PARTY_CALLBACK_WITH_PROVIDER(provider),
+      {
+        code,
+        state,
+        client_sid: clientSid
+      }
+    );
+    console.log('✅ 方法1成功!');
+    return response;
+  } catch (error: any) {
+    console.log('❌ 方法1失敗:', error.response?.status, error.response?.data);
+
+    // 如果是404,代表endpoint不存在,嘗試方法2
+    if (error.response?.status === 404 || error.response?.status === 400) {
+      console.log('嘗試方法2: provider 在 request body 中');
+      return api.post(
+        API_ENDPOINTS.THIRD_PARTY_CALLBACK,
+        {
+          code,
+          state,
+          provider,
+          client_sid: clientSid
+        }
+      );
+    }
+
+    // 其他錯誤直接拋出
+    throw error;
+  }
+};
 
 // 文章相關 API 呼叫函式
 export interface ReadingConditionItem {
@@ -626,6 +709,20 @@ export interface UploadMediaResponse {
     file_url: string;
     file_id: number;
     file_type: string;
+  };
+  message: string;
+}
+
+// 上傳檔案回應 (使用 /api/upload_file/ API)
+export interface UploadFileResponse {
+  success: boolean;
+  data: {
+    Static_Usage_Record_pk: number;
+    url: string;
+    file_extension: string;
+    is_image: boolean;
+    is_video: boolean;
+    is_audio: boolean;
   };
   message: string;
 }
@@ -789,9 +886,23 @@ export const uploadMedia = async (file: File, type: 'image' | 'video'): Promise<
   const formData = new FormData();
   formData.append('file', file);
   formData.append('type', type);
-  
+
   const response = await api.post(API_ENDPOINTS.UPLOAD_MEDIA, formData);
-  
+
+  return response.data;
+};
+
+// 上傳檔案 (使用 /api/upload_file/ API，返回 Static_Usage_Record_pk)
+export const uploadFile = async (file: File): Promise<UploadFileResponse> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await api.post(API_ENDPOINTS.UPLOAD_FILE, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
   return response.data;
 };
 
@@ -1222,6 +1333,8 @@ export interface ItemEventItem {
   name: string;
   description: string;
   base_price: number;
+  earlyBirdConfig?: EarlyBirdConfig;  // 前端編輯時使用
+  earlyBird?: EarlyBirdConfig;        // 後端回傳時使用（兩個都保留以支援不同場景）
   start_time: string;
   end_time: string;
   location: string;
@@ -1264,6 +1377,10 @@ export interface ItemEventItem {
     info: string;
     created_at: string;
   };
+  payment_info?: Array<{
+    payment_type: string;
+    payment_display: string;
+  }>;
   created_at: string;
   updated_at: string;
   statistics?: {
@@ -1275,10 +1392,32 @@ export interface ItemEventItem {
   };
 }
 
+// ItemImage 介面（用於上傳其他圖片）
+export interface ItemImage {
+  id?: number; // 新增時沒有 id
+  Static_Usage_Record: number; // FK to Static_Usage_Record
+  order: number; // 圖片順序
+  url?: string; // 圖片 URL（後端回傳時提供）
+  thumbnail_url?: string; // 縮圖 URL（後端回傳時提供）
+  file_extension?: string; // 檔案副檔名（後端回傳時提供）
+}
+
+// 用於前端上傳圖片的臨時資料結構
+export interface ItemImageUpload {
+  id?: string; // 臨時 id（用於追蹤前端狀態）
+  file?: File; // 待上傳的檔案
+  Static_Usage_Record?: number; // 上傳後取得的 pk
+  order: number; // 圖片順序
+  preview?: string; // 預覽 URL（base64 或 blob URL）
+  uploading?: boolean; // 是否正在上傳中
+  uploaded?: boolean; // 是否已上傳完成
+}
+
 // 用於建立和更新活動的介面（支援檔案上傳）
 export interface ItemEventItemFormData extends Omit<ItemEventItem, 'main_image' | 'images' | 'tags'> {
   main_image_file?: File;
   tags?: string[] | string; // 支援字串陣列或 JSON 字串
+  additional_images?: ItemImageUpload[]; // 其他圖片
 }
 
 // ItemEventModuleAssignment 介面
@@ -1324,9 +1463,78 @@ export interface ItemEventParticipant {
   is_checked_in: boolean;
   check_in_time?: string;
   info_json: any;
-  order_sn: string;
-  order_status: string;
+  form_data?: Array<{
+    field_id: number | string;
+    field_label: string;
+    field_type: string;
+    value: string;
+    display_value: string;
+  }>;
+  order_sn?: string;
+  order_status?: string;
   created_at: string;
+  updated_at?: string;
+  order_info?: {
+    sn: string;
+    status: string;
+    status_display: string;
+    created_at: string;
+  };
+  event_order_detail?: {
+    id: number;
+    participant_count: number;
+    unit_price: number;
+    subtotal: number;
+    selected_date?: string;
+    special_requests?: string;
+    options_json: any;
+  };
+}
+
+// 參與者列表回應介面
+export interface EventParticipantsResponse {
+  success: boolean;
+  message: string;
+  data: {
+    event: {
+      id: number;
+      name: string;
+      start_time: string;
+      end_time: string;
+      location: string;
+      event_status: string;
+      use_check_in: boolean;
+    };
+    form_fields?: Array<{
+      id: number | string;
+      label: string;
+      type: string;
+      placeholder?: string;
+      required?: boolean;
+      order?: number;
+      options?: Array<{
+        id: number;
+        value: string;
+        label: string;
+        price?: number;
+      }>;
+    }>;
+    statistics: {
+      total_count: number;
+      checked_in_count: number;
+      not_checked_in_count: number;
+      check_in_rate: number;
+    };
+    participants: ItemEventParticipant[];
+    pagination: {
+      current_page: number;
+      total_pages: number;
+      page_size: number;
+      total_count: number;
+      has_next: boolean;
+      has_previous: boolean;
+    };
+  };
 }
 
 // ItemEventStatistics 介面
@@ -1347,10 +1555,82 @@ export interface ItemEventStatistics {
   last_updated: string;
 }
 
-// 活動報名相關介面
+// ==================== 動態表單系統介面 ====================
+
+// 多選限制配置
+export interface MultiSelectConfig {
+  minSelection?: number; // 最少選擇數量
+  maxSelection?: number; // 最多選擇數量
+}
+
+// 表單欄位類型
+export type FormFieldType = 
+  | 'text'      // 一般文字
+  | 'textarea'  // 文字區塊
+  | 'number'    // 數字
+  | 'email'     // 電子郵件
+  | 'tel'       // 電話
+  | 'select'    // 下拉選單
+  | 'radio'     // 單選
+  | 'checkbox'  // 多選
+  | 'boolean';  // 布林值（同意條款等）
+
+// 早鳥價設定（活動層級，統一管理截止日期）
+export interface EarlyBirdConfig {
+  enabled: boolean;            // 是否啟用早鳥優惠
+  endDate: string;             // 早鳥截止日期 (ISO 8601 格式)，全活動統一
+  price?: number;              // 基本價格的早鳥價（可選）- 後端使用 price 欄位名稱
+  isActive?: boolean;          // 是否在早鳥期間內（後端計算）
+}
+
+// 表單欄位選項
+export interface FormFieldOption {
+  id: string | number;         // 選項 ID（編輯時使用）
+  value: string;               // 選項值
+  label: string;               // 選項顯示文字
+  price?: number;              // 額外價格（累加到 base_price）
+  earlyBirdPrice?: number;     // 早鳥價格（前端提交時使用，只存價格）
+  earlyBird?: {                // 早鳥價格（後端回傳時使用）
+    enabled: boolean;
+    price: number;
+    isActive?: boolean;        // 是否在早鳥期間內（後端計算）
+    endDate?: string;          // 早鳥截止日期（後端回傳）
+  };
+  conditionalFields?: FormField[]; // 選擇此選項時顯示的子欄位
+}
+
+// 表單欄位驗證規則
+export interface FormFieldValidation {
+  min?: number;           // 最小值/最小長度
+  max?: number;           // 最大值/最大長度
+  pattern?: string;       // 正則表達式
+  errorMessage?: string;  // 自訂錯誤訊息
+}
+
+// 表單欄位定義
+export interface FormField {
+  id: string | number;              // 唯一識別碼（新建時前端生成，編輯時後端返回）
+  type: FormFieldType;              // 欄位類型
+  label: string;                    // 欄位標籤
+  placeholder?: string;             // 提示文字
+  required: boolean;                // 是否必填
+  defaultValue?: any;               // 預設值
+  order: number;                    // 顯示順序
+  options?: FormFieldOption[];      // 選項（select/radio/checkbox 使用）
+  multiSelectConfig?: MultiSelectConfig; // 多選限制配置
+  validation?: FormFieldValidation; // 驗證規則
+  visible?: boolean;                // 是否可見（預設 true）
+}
+
+// 動態表單資料（扁平化結構）
+export type DynamicFormData = Record<string, any>;
+
+// ==================== 活動報名相關介面 ====================
+
 export interface EventJoinInfo extends Omit<ItemEventItem, 'statistics'> {
   // 繼承 ItemEventItem 的所有欄位，但排除 statistics
   // 這樣可以確保與新的 API 端點返回的資料結構完全匹配
+  item_pk: number; // 活動的主鍵，用於訂單創建
 }
 
 export interface EventRegistrationData {
@@ -1363,6 +1643,155 @@ export interface EventRegistrationData {
   special_requirements?: string;
   agree_terms: boolean;
   agree_privacy: boolean;
+  payment_type?: string; // 付款方式
+}
+
+// 訂單創建相關介面
+export interface OrderItem {
+  item_pk: number;
+  quantity: number;
+}
+
+export interface CreateOrderRequest {
+  items: OrderItem[];
+  payment_method: string; // 'LINEPay' | 'JkoPay' | 'NewebPay' | 'Cash'
+  participant_info?: EventRegistrationData; // 活動參與者資訊
+}
+
+export interface CreateOrderResponse {
+  success: boolean;
+  message?: string;
+  payment_html?: string; // 第三方支付需要的 HTML 表單
+  data?: {
+    order_id: number;
+    order_number: string;
+    total_amount: number;
+    payment_method: string;
+    payment_status: string;
+    participant_id?: number;
+  };
+}
+
+// 推薦訂單介面
+export interface ReferrerOrder {
+  id: number;
+  sn: string;
+  status: string;
+  status_display: string;
+  total_amount: number;
+  discount_amount: number;
+  payment_amount: number;
+  remark: string;
+  created_at: string;
+  updated_at: string;
+  member_card_id: number;
+  referrer_member_card_id: number | null;
+}
+
+export interface ReferrerOrdersResponse {
+  success: boolean;
+  data: ReferrerOrder[];
+  error: string;
+  message: string;
+}
+
+// 我的訂單 - 參與者介面
+export interface MyOrderParticipant {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  binding_code: string | null;
+  is_checked_in: boolean;
+  check_in_time: string | null;
+}
+
+// 我的訂單 - 活動圖片介面
+export interface MyOrderEventImage {
+  id: number;
+  url: string | null;
+  ratio: string;
+  order: number;
+}
+
+// 我的訂單 - 活動明細介面
+export interface MyOrderEventDetail {
+  event_order_detail_id: number;
+  event_id: number;
+  event_name: string;
+  event_description: string;
+  event_sku: string;
+  event_images: MyOrderEventImage[];
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  participant_count: number;
+  selected_date: string | null;
+  special_requests: string;
+  options_json: Record<string, any>;
+  participants: MyOrderParticipant[];
+  created_at: string;
+}
+
+// 我的訂單介面
+// 訂單付款資訊介面
+export interface OrderPaymentInfo {
+  payment_type: string;
+  payment_display: string;
+}
+
+export interface MyOrder {
+  order_id: number;
+  order_sn: string;
+  status: string;
+  status_display: string;
+  total_amount: number;
+  discount_amount: number;
+  payment_amount: number;
+  created_at: string;
+  updated_at: string;
+  events: MyOrderEventDetail[];
+  payment_info: OrderPaymentInfo[];  // 可用的付款方式列表
+}
+
+// 我的訂單分頁資訊
+export interface MyOrderPagination {
+  current_page: number;
+  total_pages: number;
+  total_count: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+// 我的訂單響應介面
+export interface MyOrdersResponse {
+  success: boolean;
+  data: {
+    orders: MyOrder[];
+    pagination: MyOrderPagination;
+  };
+  error: string;
+  message: string;
+}
+
+// ==================== 付款相關介面 ====================
+
+// 付款訂單響應介面
+export interface PayOrderResponse {
+  success: boolean;
+  payment_required?: boolean;
+  payment_method?: string;
+  payment_html?: string;  // 第三方付款 HTML 表單
+  order_sn?: string;
+  data?: {
+    payment_url?: string;
+    order_id: number;
+    payment_method: string;
+    status: string;
+  };
+  error?: string;
+  message?: string;
 }
 
 // ==================== Survey 問卷管理系統相關介面 ====================
@@ -1585,25 +2014,29 @@ export const getItemEventItemDetail = async (eventId: number): Promise<SingleRes
 
 export const createItemEventItem = async (eventData: Partial<ItemEventItemFormData>): Promise<SingleResponse<{ id: number }>> => {
   // 檢查是否包含檔案，如果是則使用 FormData
-  const hasFiles = (eventData as any).main_image_file;
-  
+  const hasFiles = (eventData as any).main_image_file instanceof File;
+
   if (hasFiles) {
     const formData = new FormData();
-    
+
     // 添加基本資料
     Object.keys(eventData).forEach(key => {
-      if (key === 'main_image_file' && (eventData as any)[key]) {
+      if (key === 'main_image_file' && (eventData as any)[key] instanceof File) {
         formData.append('main_image', (eventData as any)[key]);
-      } else if (key !== 'main_image_file' && (eventData as any)[key] !== undefined) {
+      } else if (key !== 'main_image_file' && (eventData as any)[key] !== undefined && (eventData as any)[key] !== null) {
         if (key === 'tags' && Array.isArray((eventData as any)[key])) {
           // 標籤陣列轉換為字串
           formData.append('tags', JSON.stringify((eventData as any)[key]));
-        } else {
-          formData.append(key, (eventData as any)[key]);
+        } else if (key === 'form_fields' && Array.isArray((eventData as any)[key])) {
+          // 表單欄位陣列轉換為字串
+          formData.append('form_fields', JSON.stringify((eventData as any)[key]));
+        } else if (typeof (eventData as any)[key] === 'string' || typeof (eventData as any)[key] === 'number' || typeof (eventData as any)[key] === 'boolean') {
+          // 只添加基本類型的值
+          formData.append(key, String((eventData as any)[key]));
         }
       }
     });
-    
+
     const response = await api.post(API_ENDPOINTS.EVENT_ITEM_CREATE, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -1611,46 +2044,97 @@ export const createItemEventItem = async (eventData: Partial<ItemEventItemFormDa
     });
     return response.data;
   } else {
-    const response = await api.post(API_ENDPOINTS.EVENT_ITEM_CREATE, eventData);
+    // 沒有圖片時，移除 main_image_file 欄位
+    const { main_image_file, ...cleanData } = eventData as any;
+    const response = await api.post(API_ENDPOINTS.EVENT_ITEM_CREATE, cleanData);
     return response.data;
   }
 };
 
 export const updateItemEventItem = async (eventId: number, eventData: Partial<ItemEventItemFormData>): Promise<SingleResponse<{ id: number }>> => {
   // 檢查是否包含檔案，如果是則使用 FormData
-  const hasFiles = (eventData as any).main_image_file;
-  
+  const hasFiles = (eventData as any).main_image_file instanceof File;
+
   if (hasFiles) {
     const formData = new FormData();
-    
-    // 添加基本資料
+
+    console.log('📦 準備發送 FormData，eventData keys:', Object.keys(eventData));
+
+    // 添加基本資料（不包含 form_fields，因為用 sync API 單獨處理）
     Object.keys(eventData).forEach(key => {
-      if (key === 'main_image_file' && (eventData as any)[key]) {
+      if (key === 'main_image_file' && (eventData as any)[key] instanceof File) {
+        console.log(`  ✅ 添加圖片: main_image (${(eventData as any)[key].name})`);
         formData.append('main_image', (eventData as any)[key]);
-      } else if (key !== 'main_image_file' && (eventData as any)[key] !== undefined) {
+      } else if (key !== 'main_image_file' && key !== 'form_fields' && (eventData as any)[key] !== undefined && (eventData as any)[key] !== null) {
         if (key === 'tags' && Array.isArray((eventData as any)[key])) {
           // 標籤陣列轉換為字串
-          formData.append('tags', JSON.stringify((eventData as any)[key]));
+          const tagsJson = JSON.stringify((eventData as any)[key]);
+          console.log(`  ✅ 添加標籤: ${key} = ${tagsJson}`);
+          formData.append('tags', tagsJson);
+        } else if (typeof (eventData as any)[key] === 'string' || typeof (eventData as any)[key] === 'number' || typeof (eventData as any)[key] === 'boolean') {
+          // 只添加基本類型的值
+          console.log(`  ✅ 添加欄位: ${key} = ${(eventData as any)[key]}`);
+          formData.append(key, String((eventData as any)[key]));
         } else {
-          formData.append(key, (eventData as any)[key]);
+          console.log(`  ⚠️ 跳過欄位: ${key} (type: ${typeof (eventData as any)[key]})`);
         }
+      } else if (key === 'form_fields') {
+        console.log(`  ⚠️ 跳過 form_fields (使用 sync API 單獨處理)`);
       }
     });
-    
-    const response = await api.put(API_ENDPOINTS.EVENT_ITEM_UPDATE(eventId), formData, {
+
+    console.log('📤 使用 PATCH 發送 FormData 到後端...');
+    const response = await api.patch(API_ENDPOINTS.EVENT_ITEM_UPDATE(eventId), formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
     return response.data;
   } else {
-    const response = await api.put(API_ENDPOINTS.EVENT_ITEM_UPDATE(eventId), eventData);
+    // 沒有圖片時，移除 main_image_file 和 form_fields 欄位，使用 JSON 發送
+    const { main_image_file, form_fields, ...cleanData } = eventData as any;
+    const response = await api.put(API_ENDPOINTS.EVENT_ITEM_UPDATE(eventId), cleanData);
     return response.data;
   }
 };
 
 export const deleteItemEventItem = async (eventId: number): Promise<SingleResponse<{ message: string }>> => {
   const response = await api.delete(API_ENDPOINTS.EVENT_ITEM_DELETE(eventId));
+  return response.data;
+};
+
+// ItemImage API 函數（活動其他圖片管理）
+export const getEventImages = async (eventId: number): Promise<SingleResponse<ItemImage[]>> => {
+  const response = await api.get(API_ENDPOINTS.EVENT_IMAGES(eventId));
+  return response.data;
+};
+
+export const createEventImage = async (
+  eventId: number,
+  imageData: Omit<ItemImage, 'id' | 'url' | 'thumbnail_url' | 'file_extension'>
+): Promise<SingleResponse<ItemImage>> => {
+  const response = await api.post(API_ENDPOINTS.EVENT_IMAGE_CREATE(eventId), imageData);
+  return response.data;
+};
+
+export const updateEventImage = async (
+  imageId: number,
+  imageData: Partial<ItemImage>
+): Promise<SingleResponse<ItemImage>> => {
+  const response = await api.put(API_ENDPOINTS.EVENT_IMAGE_UPDATE(imageId), imageData);
+  return response.data;
+};
+
+export const deleteEventImage = async (imageId: number): Promise<SingleResponse<{ message: string }>> => {
+  const response = await api.delete(API_ENDPOINTS.EVENT_IMAGE_DELETE(imageId));
+  return response.data;
+};
+
+export const reorderEventImages = async (
+  eventId: number,
+  imageOrders: Array<{ id: number; order: number }>
+): Promise<SingleResponse<{ message: string }>> => {
+  const response = await api.post(API_ENDPOINTS.EVENT_IMAGE_REORDER(eventId), { images: imageOrders });
   return response.data;
 };
 
@@ -1698,14 +2182,24 @@ export const getItemEventOrders = async (
 // ItemEventParticipant API 函數
 export const getItemEventParticipants = async (
   eventId: number,
-  page = 1,
-  pageSize = 20,
-  checkIn = ''
-): Promise<PaginatedResponse<ItemEventParticipant>> => {
-  const params: any = { page, page_size: pageSize };
-  if (checkIn) params.check_in = checkIn;
-  
-  const response = await api.get(API_ENDPOINTS.EVENT_PARTICIPANTS(eventId), { params });
+  params?: {
+    page?: number;
+    page_size?: number;
+    check_in_status?: 'checked_in' | 'not_checked_in';
+    search?: string;
+    order_status?: string;
+  }
+): Promise<EventParticipantsResponse> => {
+  const queryParams: any = {
+    page: params?.page || 1,
+    page_size: params?.page_size || 20
+  };
+
+  if (params?.check_in_status) queryParams.check_in_status = params.check_in_status;
+  if (params?.search) queryParams.search = params.search;
+  if (params?.order_status) queryParams.order_status = params.order_status;
+
+  const response = await api.get(API_ENDPOINTS.EVENT_PARTICIPANTS(eventId), { params: queryParams });
   return response.data;
 };
 
@@ -1740,6 +2234,76 @@ export const getItemEventStatistics = async (eventId: number): Promise<SingleRes
 
 export const refreshItemEventStatistics = async (eventId: number): Promise<SingleResponse<{ message: string }>> => {
   const response = await api.put(API_ENDPOINTS.EVENT_STATISTICS_REFRESH(eventId), {});
+  return response.data;
+};
+
+// 表單欄位批量創建 API 函數
+export interface BatchFormFieldCreate {
+  id?: string | number;      // 欄位 ID（sync API 使用，有 id 表示更新，無 id 表示創建）
+  field_type: FormFieldType;
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  order: number;
+  multiSelectConfig?: {
+    minSelection?: number;
+    maxSelection?: number;
+  };
+  options?: Array<{
+    id?: string | number;    // 選項 ID（sync API 使用）
+    label: string;
+    price: number;
+    order: number;
+    conditionalFields?: BatchFormFieldCreate[];
+  }>;
+}
+
+export interface BatchFormFieldsRequest {
+  fields: BatchFormFieldCreate[];
+}
+
+export interface BatchFormFieldsResponse {
+  success: boolean;
+  data: {
+    form_config: FormField[];
+    stats: {
+      // batch-create API 的統計
+      fields_count?: number;
+      options_count?: number;
+      conditional_fields_count?: number;
+      // sync API 的統計
+      fields_created?: number;
+      fields_updated?: number;
+      fields_deleted?: number;
+      options_created?: number;
+      options_updated?: number;
+      options_deleted?: number;
+      conditionals_created?: number;
+      conditionals_updated?: number;
+      conditionals_deleted?: number;
+    };
+  };
+  message: string;
+}
+
+export const batchCreateFormFields = async (
+  eventId: number,
+  fieldsData: BatchFormFieldsRequest
+): Promise<BatchFormFieldsResponse> => {
+  const response = await api.post(API_ENDPOINTS.EVENT_FORM_FIELDS_BATCH_CREATE(eventId), fieldsData);
+  return response.data;
+};
+
+export const syncFormFields = async (
+  eventId: number,
+  fieldsData: BatchFormFieldsRequest
+): Promise<BatchFormFieldsResponse> => {
+  const response = await api.post(API_ENDPOINTS.EVENT_FORM_FIELDS_SYNC(eventId), fieldsData);
+  return response.data;
+};
+
+export const getFormFields = async (eventId: number): Promise<SingleResponse<FormField[]>> => {
+  const response = await api.get(API_ENDPOINTS.EVENT_FORM_FIELDS_GET(eventId));
   return response.data;
 };
 
@@ -1802,8 +2366,10 @@ export const canRegisterEvent = (event: ItemEventItem): boolean => {
 // ==================== 活動報名相關 API 函數 ====================
 
 // 根據 SKU 獲取活動報名資訊
-export const getEventJoinInfo = async (sku: string): Promise<SingleResponse<EventJoinInfo>> => {
-  const response = await api.get(API_ENDPOINTS.EVENT_JOIN_INFO(sku));
+export const getEventJoinInfo = async (sku: string, queryParams?: Record<string, string>): Promise<SingleResponse<EventJoinInfo>> => {
+  const response = await api.get(API_ENDPOINTS.EVENT_JOIN_INFO(sku), {
+    params: queryParams
+  });
   return response.data;
 };
 
@@ -1826,11 +2392,112 @@ export const getEventSkuList = async (
 
 // 提交活動報名
 export const submitEventRegistration = async (
-  sku: string, 
+  sku: string,
   registrationData: EventRegistrationData
 ): Promise<SingleResponse<{ registration_id: number; message: string }>> => {
   const response = await api.post(API_ENDPOINTS.EVENT_REGISTRATION_SUBMIT(sku), registrationData);
   return response.data;
+};
+
+// 創建訂單（用於活動報名支付）
+export const createOrder = async (
+  orderData: CreateOrderRequest
+): Promise<CreateOrderResponse> => {
+  try {
+    const response = await api.post(API_ENDPOINTS.CREATE_ORDER, orderData);
+    return response.data;
+  } catch (error: any) {
+    console.error('創建訂單失敗:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || '創建訂單時發生錯誤'
+    };
+  }
+};
+
+// 獲取推薦訂單列表
+export const getReferrerOrders = async (itemId: number): Promise<ReferrerOrdersResponse> => {
+  try {
+    const response = await api.get(API_ENDPOINTS.REFERRER_ORDERS, {
+      params: { item_id: itemId }
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('獲取推薦訂單失敗:', error);
+    return {
+      success: false,
+      data: [],
+      error: error.response?.data?.error || error.message || '獲取推薦訂單時發生錯誤',
+      message: error.response?.data?.message || '獲取推薦訂單失敗'
+    };
+  }
+};
+
+/**
+ * 獲取我的活動訂單
+ * @param params 查詢參數
+ * @param params.status 訂單狀態 (pending, paid, completed, cancelled, etc.)
+ * @param params.page 頁碼
+ * @param params.page_size 每頁數量
+ * @returns Promise<MyOrdersResponse>
+ */
+export const getMyOrders = async (params?: {
+  status?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<MyOrdersResponse> => {
+  try {
+    console.log('🌐 [API] 發送請求至:', API_ENDPOINTS.MY_ORDERS);
+    console.log('🌐 [API] 請求參數:', params);
+    const response = await api.get(API_ENDPOINTS.MY_ORDERS, { params });
+    console.log('🌐 [API] 回應狀態:', response.status);
+    console.log('🌐 [API] 回應數據:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] 獲取我的訂單失敗:', error);
+    console.error('❌ [API] 錯誤狀態碼:', error.response?.status);
+    console.error('❌ [API] 錯誤回應:', error.response?.data);
+    return {
+      success: false,
+      data: {
+        orders: [],
+        pagination: {
+          current_page: 1,
+          total_pages: 0,
+          total_count: 0,
+          page_size: 20,
+          has_next: false,
+          has_previous: false
+        }
+      },
+      error: error.response?.data?.error || error.message || '獲取我的訂單時發生錯誤',
+      message: error.response?.data?.message || '獲取我的訂單失敗'
+    };
+  }
+};
+
+// ==================== 付款相關 API 函數 ====================
+
+/**
+ * 執行訂單付款
+ * @param orderPk 訂單 ID
+ * @param paymentMethod 付款方式（例如：'NewebPay', 'LINEPay'）
+ * @returns 付款訂單響應（可能包含第三方付款 URL）
+ */
+export const payOrder = async (orderPk: number, paymentMethod: string): Promise<PayOrderResponse> => {
+  try {
+    console.log('🌐 [API] 執行訂單付款:', { orderPk, paymentMethod });
+    const response = await api.post(API_ENDPOINTS.PAY_ORDER(orderPk, paymentMethod));
+    console.log('✅ [API] 付款訂單回應:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] 執行訂單付款失敗:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || '執行訂單付款時發生錯誤',
+      message: error.response?.data?.message || '執行訂單付款失敗'
+    };
+  }
 };
 
 // ==================== Survey 問卷管理系統 API 函數 ====================

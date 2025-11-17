@@ -45,6 +45,8 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
   // GetOne modal state
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyData, setKeyData] = useState<any>(null);
+  const [linkType, setLinkType] = useState<'line' | 'web'>('line');
+  const [webUserType, setWebUserType] = useState<'client' | 'provider'>('client');
   
   // Used keys list modal state
   const [showUsedKeysModal, setShowUsedKeysModal] = useState(false);
@@ -169,6 +171,8 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
       const result = await keysGetBatchDetail(batchId, { status: 'available' });
       if (result?.success && result?.data?.length > 0) {
         setKeyData(result.data[0]);
+        setLinkType('line'); // 重置為 LINE
+        setWebUserType('client'); // 重置為 client
         setShowKeyModal(true);
       } else {
         alert('無法取得金鑰資訊');
@@ -630,35 +634,89 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
                 </div>
               </div>
 
-              {/* LINE URL */}
+              {/* Link Type Selector */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">LINE 連結</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={keyData.line_url || ''}
-                    readOnly
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                  />
+                <label className="block text-sm font-medium text-gray-700 mb-2">連結類型</label>
+                <div className="flex gap-2">
                   <button
-                    onClick={() => copyToClipboard(keyData.line_url, 'LINE 連結')}
-                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                    onClick={() => setLinkType('line')}
+                    className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                      linkType === 'line'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
                   >
-                    複製
+                    LINE
+                  </button>
+                  <button
+                    onClick={() => setLinkType('web')}
+                    className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                      linkType === 'web'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    WEB
                   </button>
                 </div>
               </div>
 
-              {/* Created At */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">建立時間</label>
-                <input
-                  type="text"
-                  value={formatToSeconds(keyData.created_at) || ''}
-                  readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
-                />
-              </div>
+              {/* QR Code Display */}
+              {(() => {
+                const webUrl = `${import.meta.env.VITE_APP_URL || 'https://www.flashfalcon.info'}/${webUserType}/profile?key=${keyData.code}`;
+                const currentUrl = linkType === 'line' ? keyData.line_url : webUrl;
+                const currentLabel = linkType === 'line' ? 'LINE 連結' : 'WEB 連結';
+
+                return currentUrl ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">{currentLabel}</label>
+                    <div className="flex items-start gap-4">
+                      {/* QR Code */}
+                      <div className="flex flex-col items-center gap-3 flex-1">
+                        <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentUrl)}`}
+                            alt={`${currentLabel} QR Code`}
+                            className="w-48 h-48"
+                          />
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(currentUrl, currentLabel)}
+                          className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                        >
+                          複製連結
+                        </button>
+                      </div>
+
+                      {/* User Type Selector (only for WEB) */}
+                      {linkType === 'web' && (
+                        <div className="flex flex-col gap-2 pt-4">
+                          <button
+                            onClick={() => setWebUserType('client')}
+                            className={`px-4 py-2 rounded-lg border transition-colors min-w-[100px] ${
+                              webUserType === 'client'
+                                ? 'bg-orange-500 text-white border-orange-500'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            Client
+                          </button>
+                          <button
+                            onClick={() => setWebUserType('provider')}
+                            className={`px-4 py-2 rounded-lg border transition-colors min-w-[100px] ${
+                              webUserType === 'provider'
+                                ? 'bg-orange-500 text-white border-orange-500'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            Provider
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
 
               {/* Close Button */}
               <div className="flex justify-end pt-2">

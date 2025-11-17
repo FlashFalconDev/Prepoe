@@ -1,160 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  Calendar, 
-  Ticket,
-  CreditCard,
-  BookOpen,
-  ChevronRight,
-  User,
-  Edit3,
-  X
-} from 'lucide-react';
+import { Star, Clock, X, User, Calendar, Ticket, CreditCard, BookOpen } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { getMemberComplete, updateMemberDetails, type MemberComplete, type MemberDetailsUpdateData } from '../../config/api';
 import { useToast } from '../../hooks/useToast';
-import { getEventSkuList, createEventJoinUrl, ItemEventItem, getMemberComplete, updateMemberDetails, type MemberComplete, type MemberDetailsUpdateData } from '../../config/api';
 import { AI_COLORS } from '../../constants/colors';
-
+import { handlePermissionRedeem } from '../../utils/permissionUtils';
+import MyOrdersModal from '../../components/MyOrdersModal';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // 專區卡片組件
 const FeatureCard: React.FC<{
   icon: React.ComponentType<any>;
   title: string;
-  description: string;
-  path: string;
-  isMobile: boolean;
+  path?: string;
+  onClick?: () => void;
   isComingSoon?: boolean;
-}> = ({ icon: Icon, title, description, path, isMobile, isComingSoon = true }) => (
-  <div
-    className={`block bg-white rounded-xl shadow-sm transition-all duration-200 border border-gray-100 ${
-      isMobile ? 'p-4' : 'p-5'
-    } ${isComingSoon ? 'opacity-60 cursor-not-allowed pointer-events-none' : 'hover:shadow-md'}`}
-  >
-    <div className="flex items-start gap-4">
-      <div className={`w-12 h-12 ${AI_COLORS.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
-        <Icon size={24} className={AI_COLORS.text} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-2">
-          <h3 className={`font-semibold text-gray-900 ${isMobile ? 'text-base' : 'text-lg'}`}>
-            {title}
-          </h3>
-          {isComingSoon && (
-            <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
-              即將推出
-            </span>
-          )}
-        </div>
-        <p className={`text-gray-600 ${isMobile ? 'text-sm' : 'text-base'}`}>
-          {description}
-        </p>
-      </div>
-      <ChevronRight size={20} className="text-gray-400 flex-shrink-0 self-center" />
-    </div>
-  </div>
-);
+}> = ({ icon: Icon, title, path, onClick, isComingSoon = true }) => {
+  const navigate = useNavigate();
 
-// 會員資料組件
-const MemberProfile: React.FC<{
-  memberData: MemberComplete | null;
-  isLoading: boolean;
-  onEditClick: () => void;
-  isMobile: boolean;
-}> = ({ memberData, isLoading, onEditClick, isMobile }) => {
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <div className="animate-pulse">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
-            <div className="flex-1">
-              <div className="h-6 bg-gray-200 rounded mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="text-center">
-                <div className="h-6 bg-gray-200 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!memberData) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 text-center">
-        <div className="text-gray-400 mb-2">
-          <User size={48} />
-        </div>
-        <p className="text-gray-500">無法載入會員資料</p>
-      </div>
-    );
-  }
+  const handleClick = () => {
+    if (isComingSoon) return;
+    if (onClick) {
+      onClick();
+    } else if (path) {
+      navigate(path);
+    }
+  };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-      {/* 會員基本資料 */}
-      <div className="flex items-center gap-4 mb-5">
-        <div className={`w-16 h-16 ${AI_COLORS.bg} rounded-full flex items-center justify-center`}>
-          <User size={32} className={AI_COLORS.text} />
-        </div>
-        <div className="flex-1">
-          <h3 className={`font-bold text-gray-900 ${isMobile ? 'text-lg' : 'text-xl'} mb-1`}>
-            {memberData.member_details.nick_name || '未設定'}
-          </h3>
-          <p className="text-gray-600 text-sm mb-1">
-            {memberData.member_details.email || '未設定'}
-          </p>
-          <span className="inline-block px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
-            會員
-          </span>
-        </div>
-        <button
-          onClick={onEditClick}
-          className={`px-4 py-2 ${AI_COLORS.button} text-white rounded-lg hover:opacity-90 transition-opacity`}
-        >
-          編輯
-        </button>
+    <div
+      onClick={handleClick}
+      className={`flex flex-col items-center justify-center bg-white rounded-xl shadow-sm transition-all duration-200 border border-gray-100 p-6 ${
+        isComingSoon ? 'opacity-60 cursor-not-allowed pointer-events-none' : 'hover:shadow-md cursor-pointer'
+      }`}
+    >
+      <div className={`w-14 h-14 ${AI_COLORS.bg} rounded-xl flex items-center justify-center mb-3`}>
+        <Icon size={28} className={AI_COLORS.text} />
       </div>
-
-      {/* 會員統計資料 - 簡化版 */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="text-center">
-          <div className="text-xl font-bold text-blue-600 mb-1">
-            {memberData.member_card.exp || 0}
-          </div>
-          <div className="text-sm text-gray-500">經驗值</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xl font-bold text-blue-600 mb-1">
-            {memberData.member_card.points || 0}
-          </div>
-          <div className="text-sm text-gray-500">積分</div>
-        </div>
-        <div className="text-center">
-          <div className={`text-xl font-bold ${AI_COLORS.text} mb-1`}>
-            {memberData.member_card.coins || 0}
-          </div>
-          <div className="text-sm text-gray-500">代幣</div>
-        </div>
-      </div>
+      <h3 className="font-semibold text-gray-900 text-base text-center">
+        {title}
+      </h3>
     </div>
   );
 };
 
-// 編輯會員資料彈窗
-const EditMemberModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  memberData: MemberComplete | null;
-  onUpdate: (data: MemberDetailsUpdateData) => Promise<void>;
-  isUpdating: boolean;
-}> = ({ isOpen, onClose, memberData, onUpdate, isUpdating }) => {
-  const [formData, setFormData] = useState<MemberDetailsUpdateData>({
+const UserDashboard: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { showToast } = useToast();
+  const { checkAuth } = useAuth();
+
+  // 會員資料狀態
+  const [memberData, setMemberData] = useState<MemberComplete | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+  const [redeemCode, setRedeemCode] = useState('');
+
+  // 我的訂單彈窗狀態
+  const [isMyOrdersModalOpen, setIsMyOrdersModalOpen] = useState(false);
+
+  // 編輯表單狀態
+  const [editForm, setEditForm] = useState<MemberDetailsUpdateData>({
     nick_name: '',
     email: '',
     phone: '',
@@ -163,10 +70,35 @@ const EditMemberModal: React.FC<{
     address: ''
   });
 
-  // 當彈窗開啟時，初始化表單資料
-  useEffect(() => {
-    if (isOpen && memberData) {
-      setFormData({
+  // 載入會員資料
+  const loadMemberData = async () => {
+    try {
+      setIsLoading(true);
+      const response = await getMemberComplete();
+      if (response.success) {
+        setMemberData(response.data);
+        // 初始化編輯表單
+        setEditForm({
+          nick_name: response.data.member_details.nick_name || '',
+          email: response.data.member_details.email || '',
+          phone: response.data.member_details.phone || '',
+          birthday: response.data.member_details.birthday || '',
+          gender: response.data.member_details.gender || 'male',
+          address: response.data.member_details.address || ''
+        });
+      }
+    } catch (error) {
+      console.error('載入會員資料失敗:', error);
+      showToast({ type: 'error', title: '載入會員資料失敗' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 開啟編輯彈窗
+  const handleEditClick = () => {
+    if (memberData) {
+      setEditForm({
         nick_name: memberData.member_details.nick_name || '',
         email: memberData.member_details.email || '',
         phone: memberData.member_details.phone || '',
@@ -174,323 +106,43 @@ const EditMemberModal: React.FC<{
         gender: memberData.member_details.gender || 'male',
         address: memberData.member_details.address || ''
       });
-    }
-  }, [isOpen, memberData]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onUpdate(formData);
-  };
-
-  const handleInputChange = (field: keyof MemberDetailsUpdateData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">編輯會員資料</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              暱稱
-            </label>
-            <input
-              type="text"
-              value={formData.nick_name}
-              onChange={(e) => handleInputChange('nick_name', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-              placeholder="請輸入暱稱"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              電子郵件
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-              placeholder="請輸入電子郵件"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              電話
-            </label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => handleInputChange('phone', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-              placeholder="請輸入電話號碼"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              生日
-            </label>
-            <input
-              type="date"
-              value={formData.birthday}
-              onChange={(e) => handleInputChange('birthday', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              性別
-            </label>
-            <select
-              value={formData.gender}
-              onChange={(e) => handleInputChange('gender', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            >
-              <option value="male">男性</option>
-              <option value="female">女性</option>
-              <option value="other">其他</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              地址
-            </label>
-            <textarea
-              value={formData.address}
-              onChange={(e) => handleInputChange('address', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-              rows={3}
-              placeholder="請輸入地址"
-            />
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={isUpdating}
-              className={`flex-1 px-4 py-2 ${AI_COLORS.button} text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {isUpdating ? '更新中...' : '更新資料'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// 活動預覽組件
-const EventPreview: React.FC<{ events: ItemEventItem[]; isMobile: boolean }> = ({ events, isMobile }) => {
-  const navigate = useNavigate();
-  const { showSuccess, showError } = useToast();
-
-  // 格式化時間
-  const formatDateTime = (dateTime: string) => {
-    try {
-      return new Date(dateTime).toLocaleString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return dateTime;
+      setIsEditModalOpen(true);
     }
   };
 
-  // 複製報名連結
-  const handleCopyJoinLink = async (event: ItemEventItem) => {
-    try {
-      if (!event.sku) {
-        showError('無法複製連結', '此活動尚未設定 SKU，無法生成報名連結');
-        return;
-      }
-
-      const joinUrl = createEventJoinUrl(event.sku);
-      
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(joinUrl);
-        showSuccess('連結已複製', '報名連結已複製到剪貼簿');
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = joinUrl;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        try {
-          document.execCommand('copy');
-          showSuccess('連結已複製', '報名連結已複製到剪貼簿');
-        } catch (err) {
-          showError('複製失敗', '無法自動複製，請手動複製連結');
-        } finally {
-          document.body.removeChild(textArea);
-        }
-      }
-    } catch (error: any) {
-      showError('複製失敗', error.message || '複製過程中發生錯誤');
-    }
-  };
-
-  // 直接跳轉到報名頁面
-  const handleJoinEvent = (event: ItemEventItem) => {
-    if (!event.sku) {
-      showError('無法報名', '此活動尚未設定 SKU，無法進行報名');
+  // 處理金鑰兌換
+  const handleRedeem = async () => {
+    if (!redeemCode.trim()) {
+      showToast({ type: 'error', title: '請輸入兌換碼' });
       return;
     }
-    
-    const joinUrl = createEventJoinUrl(event.sku);
-    navigate(joinUrl);
+
+    await handlePermissionRedeem(redeemCode, {
+      useToast: true,
+      showSuccess: (message) => showToast({ type: 'success', title: message }),
+      showError: (message) => showToast({ type: 'error', title: message }),
+      checkAuth,
+      onSuccess: () => {
+        setRedeemCode('');
+        setIsRedeemModalOpen(false);
+        loadMemberData(); // 重新載入會員資料以更新積分
+      }
+    });
   };
 
-  // 只顯示前3個活動作為預覽
-  const previewEvents = events.slice(0, 3);
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">熱門活動</h3>
-        <a 
-          href="/client/event" 
-          className={`${AI_COLORS.text} hover:${AI_COLORS.textDark} text-sm font-medium`}
-        >
-          查看全部 →
-        </a>
-      </div>
-      
-      {previewEvents.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-gray-400 mb-2">
-            <i className="ri-calendar-line text-3xl"></i>
-          </div>
-          <p className="text-gray-500 text-sm">暫無活動</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {previewEvents.map((event) => (
-            <div key={event.id} className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
-              <div className="flex items-start gap-3">
-                {event.main_image && (
-                  <img
-                    src={event.main_image.url}
-                    alt={event.name}
-                    className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-gray-900 text-sm line-clamp-1 mb-1">{event.name}</h4>
-                  <div className="space-y-1 text-xs text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <i className="ri-calendar-line"></i>
-                      <span>{formatDateTime(event.start_time)}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <i className="ri-money-dollar-circle-line"></i>
-                      <span>NT$ {event.base_price}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => handleJoinEvent(event)}
-                      disabled={event.event_status !== 'registration_open'}
-                      className={`px-3 py-1 ${AI_COLORS.button} text-xs rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
-                    >
-                      {event.event_status === 'registration_open' ? '報名' : '截止'}
-                    </button>
-                    <button
-                      onClick={() => handleCopyJoinLink(event)}
-                      className="px-2 py-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors text-xs"
-                      title="複製報名連結"
-                    >
-                      <i className="ri-link"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// 使用者主頁面
-const UserDashboard: React.FC = () => {
-  const [isMobile, setIsMobile] = useState(false);
-  const [events, setEvents] = useState<ItemEventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { showError, showToast } = useToast();
-  
-  // 會員資料狀態
-  const [memberData, setMemberData] = useState<MemberComplete | null>(null);
-  const [isMemberLoading, setIsMemberLoading] = useState(true);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  // 檢測設備類型
-  React.useEffect(() => {
-    const checkDevice = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    
-    checkDevice();
-    window.addEventListener('resize', checkDevice);
-    
-    return () => window.removeEventListener('resize', checkDevice);
-  }, []);
-
-  // 載入會員資料
-  const loadMemberData = async () => {
-    try {
-      setIsMemberLoading(true);
-      const response = await getMemberComplete();
-      if (response.success) {
-        setMemberData(response.data);
-      }
-    } catch (error) {
-      console.error('載入會員資料失敗:', error);
-      showToast({ type: 'error', title: '載入會員資料失敗' });
-    } finally {
-      setIsMemberLoading(false);
-    }
+  // 關閉編輯彈窗
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
   };
 
   // 更新會員資料
-  const handleUpdateMember = async (data: MemberDetailsUpdateData) => {
+  const handleUpdateMember = async () => {
     try {
       setIsUpdating(true);
-      const response = await updateMemberDetails(data);
+      const response = await updateMemberDetails(editForm);
       if (response.success) {
         showToast({ type: 'success', title: '會員資料更新成功' });
+        // 重新載入資料
         await loadMemberData();
         setIsEditModalOpen(false);
       } else {
@@ -504,123 +156,535 @@ const UserDashboard: React.FC = () => {
     }
   };
 
+  // 處理表單輸入變更
+  const handleInputChange = (field: keyof MemberDetailsUpdateData, value: string) => {
+    setEditForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
-  // 載入活動列表
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        setLoading(true);
-        const response = await getEventSkuList();
-        if (response.success) {
-          const eventsData = response.data.events;
-          if (Array.isArray(eventsData)) {
-            setEvents(eventsData);
-          } else {
-            setEvents([]);
-          }
-        } else {
-          console.warn('載入活動失敗:', response.message);
-          setEvents([]);
-        }
-      } catch (error: any) {
-        console.error('載入活動資料失敗:', error);
-        setEvents([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadEvents();
-  }, []);
-
-  // 載入會員資料
+  // 組件載入時取得會員資料
   useEffect(() => {
     loadMemberData();
   }, []);
 
-
-  const features = [
-    {
-      icon: Calendar,
-      title: '參與活動',
-      description: '查看已報名的活動和課程',
-      path: '/client/event'
-    },
-    {
-      icon: Ticket,
-      title: '票劵中心',
-      description: '管理您的票劵和優惠券',
-      path: '/client/tickets'
-    },
-    {
-      icon: CreditCard,
-      title: '抽卡紀錄',
-      description: '查看抽卡歷史和獲得獎勵',
-      path: '/client/cards'
-    },
-    {
-      icon: BookOpen,
-      title: '閱讀紀錄',
-      description: '瀏覽文章閱讀歷史和收藏',
-      path: '/client/articles'
+  // 檢查 URL 參數，如果有 key 則自動開啟兌換彈窗
+  useEffect(() => {
+    const keyParam = searchParams.get('key');
+    if (keyParam) {
+      setRedeemCode(keyParam);
+      setIsRedeemModalOpen(true);
+      // 清除 URL 參數，避免重複觸發
+      searchParams.delete('key');
+      setSearchParams(searchParams);
     }
-  ];
+  }, [searchParams, setSearchParams]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
-      {/* 主內容區域 */}
-      <div className={`${isMobile ? 'p-4' : 'p-6'}`}>
-        {/* 會員資料區域 */}
-        <div className="mb-6">
-          <MemberProfile
-            memberData={memberData}
-            isLoading={isMemberLoading}
-            onEditClick={() => setIsEditModalOpen(true)}
-            isMobile={isMobile}
-          />
+      <div className="max-w-4xl mx-auto px-4 py-6">
+
+        {/* User Profile Summary */}
+        <div className="mb-8">
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                <span className="ml-2 text-gray-600">載入中...</span>
+              </div>
+            ) : memberData ? (
+              <>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className={`w-15 h-15 ${AI_COLORS.bg} rounded-full flex items-center justify-center`}>
+                    <User size={32} className={AI_COLORS.text} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      {memberData.member_details.nick_name || '未設定'}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-1">
+                      {memberData.member_details.email || '未設定'}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {memberData.member_card.client_info.name || '會員'}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setIsRedeemModalOpen(true)}
+                      className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium transition-colors hover:opacity-90"
+                    >
+                      兌換
+                    </button>
+                    <button
+                      onClick={handleEditClick}
+                      className={`px-4 py-2 ${AI_COLORS.button} rounded-lg text-sm font-medium transition-colors hover:opacity-90`}
+                    >
+                      編輯
+                    </button>
+                  </div>
+                </div>
+
+                {/* User Stats */}
+                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${AI_COLORS.text} mb-1`}>
+                      {memberData.member_card.card_id}
+                    </div>
+                    <div className="text-xs text-gray-500">Card ID</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-600 mb-1">
+                      {memberData.member_card.exp.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500">經驗值</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-600 mb-1">
+                      {memberData.member_card.points.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500">積分</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-yellow-600 mb-1">
+                      {memberData.member_card.coins.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500">金幣</div>
+                  </div>
+                </div>
+
+                {/* Member Status - 目前計畫 */}
+                {memberData.member_status?.success && memberData.member_status.data && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-4">目前計畫</h4>
+
+                    {/* 訂閱方案資訊 */}
+                    <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl p-4 mb-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Star size={20} className="text-orange-500" />
+                          <span className="font-semibold text-gray-900">
+                            {memberData.member_status.data.subscription.plan}
+                          </span>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          memberData.member_status.data.subscription.auto_renew
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {memberData.member_status.data.subscription.auto_renew ? '自動續訂' : '手動續訂'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-gray-600 mb-1">剩餘天數</p>
+                          <p className="font-semibold text-gray-900">
+                            {memberData.member_status.data.subscription.days_left} 天
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 mb-1">到期日</p>
+                          <p className="font-semibold text-gray-900">
+                            {new Date(memberData.member_status.data.subscription.end_at).toLocaleDateString('zh-TW')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 待處理變更 */}
+                    {memberData.member_status.data.pending_change.has_pending && (
+                      <div className="bg-yellow-50 rounded-xl p-4 mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock size={20} className="text-yellow-600" />
+                          <span className="font-semibold text-gray-900">待處理變更</span>
+                        </div>
+                        <p className="text-sm text-gray-700">
+                          將於 {memberData.member_status.data.pending_change.effective_at ?
+                            new Date(memberData.member_status.data.pending_change.effective_at).toLocaleDateString('zh-TW') :
+                            '未知日期'} 變更為 {memberData.member_status.data.pending_change.target_plan || '未指定方案'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">無法載入會員資料</p>
+                <button
+                  onClick={loadMemberData}
+                  className="mt-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                >
+                  重新載入
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 功能專區 */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">功能選單</h2>
-          {isMobile ? (
-            // 手機版：單列布局
-            <div className="space-y-4">
-              {features.map((feature) => (
-                <FeatureCard
-                  key={feature.path}
-                  {...feature}
-                  isMobile={isMobile}
-                />
-              ))}
-            </div>
-          ) : (
-            // 電腦版：網格布局
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-              {features.map((feature) => (
-                <FeatureCard
-                  key={feature.path}
-                  {...feature}
-                  isMobile={isMobile}
-                />
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <FeatureCard
+              icon={Calendar}
+              title="參與活動"
+              onClick={() => setIsMyOrdersModalOpen(true)}
+              isComingSoon={false}
+            />
+            <FeatureCard
+              icon={Ticket}
+              title="票劵中心"
+              path="/client/tickets"
+              isComingSoon={true}
+            />
+            <FeatureCard
+              icon={CreditCard}
+              title="抽卡紀錄"
+              path="/client/cards"
+              isComingSoon={true}
+            />
+            <FeatureCard
+              icon={BookOpen}
+              title="閱讀紀錄"
+              path="/client/articles"
+              isComingSoon={true}
+            />
+          </div>
         </div>
-
-
-        {/* 編輯會員資料彈窗 */}
-        <EditMemberModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          memberData={memberData}
-          onUpdate={handleUpdateMember}
-          isUpdating={isUpdating}
-        />
       </div>
+
+      {/* 我的訂單彈窗 */}
+      <MyOrdersModal
+        isOpen={isMyOrdersModalOpen}
+        onClose={() => setIsMyOrdersModalOpen(false)}
+      />
+
+      {/* 編輯會員資料彈窗 */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            {/* 彈窗標題 */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">編輯個人資料</h3>
+              <button
+                onClick={handleCloseEditModal}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* 表單內容 */}
+            <div className="p-6 space-y-4">
+              {/* 暱稱 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  暱稱
+                </label>
+                <input
+                  type="text"
+                  value={editForm.nick_name || ''}
+                  onChange={(e) => handleInputChange('nick_name', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="請輸入暱稱"
+                />
+              </div>
+
+              {/* 電子郵件 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  電子郵件
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email || ''}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="請輸入電子郵件"
+                />
+              </div>
+
+              {/* 電話 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  電話
+                </label>
+                <input
+                  type="tel"
+                  value={editForm.phone || ''}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="請輸入電話號碼"
+                />
+              </div>
+
+              {/* 生日 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  生日
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* 年份選擇 */}
+                  <select
+                    value={editForm.birthday ? editForm.birthday.split('-')[0] : ''}
+                    onChange={(e) => {
+                      const year = e.target.value;
+                      const currentDate = editForm.birthday || '';
+                      const month = currentDate ? currentDate.split('-')[1] || '01' : '01';
+                      const day = currentDate ? currentDate.split('-')[2] || '01' : '01';
+                      const newDate = year ? `${year}-${month}-${day}` : '';
+                      handleInputChange('birthday', newDate);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">年</option>
+                    {Array.from({ length: 80 }, (_, i) => {
+                      const year = new Date().getFullYear() - i;
+                      return (
+                        <option key={year} value={year}>
+                          {year}年
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {/* 月份選擇 */}
+                  <select
+                    value={editForm.birthday ? editForm.birthday.split('-')[1] : ''}
+                    onChange={(e) => {
+                      const month = e.target.value;
+                      const currentDate = editForm.birthday || '';
+                      const year = currentDate ? currentDate.split('-')[0] || '' : '';
+                      const day = currentDate ? currentDate.split('-')[2] || '01' : '01';
+                      const newDate = year && month ? `${year}-${month}-${day}` : '';
+                      handleInputChange('birthday', newDate);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">月</option>
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const month = String(i + 1).padStart(2, '0');
+                      return (
+                        <option key={month} value={month}>
+                          {month}月
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {/* 日期選擇 */}
+                  <select
+                    value={editForm.birthday ? editForm.birthday.split('-')[2] : ''}
+                    onChange={(e) => {
+                      const day = e.target.value;
+                      const currentDate = editForm.birthday || '';
+                      const year = currentDate ? currentDate.split('-')[0] || '' : '';
+                      const month = currentDate ? currentDate.split('-')[1] || '' : '';
+                      const newDate = year && month && day ? `${year}-${month}-${day}` : '';
+                      handleInputChange('birthday', newDate);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">日</option>
+                    {(() => {
+                      const currentDate = editForm.birthday || '';
+                      const year = currentDate ? parseInt(currentDate.split('-')[0]) : new Date().getFullYear();
+                      const month = currentDate ? parseInt(currentDate.split('-')[1]) : 1;
+                      const daysInMonth = new Date(year, month, 0).getDate();
+                      return Array.from({ length: daysInMonth }, (_, i) => {
+                        const day = String(i + 1).padStart(2, '0');
+                        return (
+                          <option key={day} value={day}>
+                            {day}日
+                          </option>
+                        );
+                      });
+                    })()}
+                  </select>
+                </div>
+
+                {/* 快速選擇按鈕 */}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date();
+                      const todayStr = today.toISOString().split('T')[0];
+                      handleInputChange('birthday', todayStr);
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    今天
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date();
+                      today.setFullYear(today.getFullYear() - 20);
+                      const dateStr = today.toISOString().split('T')[0];
+                      handleInputChange('birthday', dateStr);
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    20歲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date();
+                      today.setFullYear(today.getFullYear() - 30);
+                      const dateStr = today.toISOString().split('T')[0];
+                      handleInputChange('birthday', dateStr);
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    30歲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date();
+                      today.setFullYear(today.getFullYear() - 40);
+                      const dateStr = today.toISOString().split('T')[0];
+                      handleInputChange('birthday', dateStr);
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    40歲
+                  </button>
+                </div>
+
+                {/* 顯示當前選擇的日期 */}
+                {editForm.birthday && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    選擇的日期：{editForm.birthday}
+                  </div>
+                )}
+              </div>
+
+              {/* 性別 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  性別
+                </label>
+                <select
+                  value={editForm.gender || 'male'}
+                  onChange={(e) => handleInputChange('gender', e.target.value as 'male' | 'female' | 'other')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                >
+                  <option value="male">男性</option>
+                  <option value="female">女性</option>
+                  <option value="other">其他</option>
+                </select>
+              </div>
+
+              {/* 地址 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  地址
+                </label>
+                <textarea
+                  value={editForm.address || ''}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="請輸入地址"
+                />
+              </div>
+            </div>
+
+            {/* 按鈕區域 */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={handleCloseEditModal}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                disabled={isUpdating}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleUpdateMember}
+                disabled={isUpdating}
+                className={`px-6 py-2 ${AI_COLORS.button} rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {isUpdating ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    更新中...
+                  </div>
+                ) : (
+                  '更新資料'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 兌換碼彈窗 */}
+      {isRedeemModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">兌換點數或功能</h3>
+              <button
+                onClick={() => {
+                  setIsRedeemModalOpen(false);
+                  setRedeemCode('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              請輸入您的兌換碼以獲得額外的點數、代幣或解鎖新功能。
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                兌換碼
+              </label>
+              <input
+                type="text"
+                value={redeemCode}
+                onChange={(e) => setRedeemCode(e.target.value)}
+                placeholder="請輸入您的兌換碼"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleRedeem();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setIsRedeemModalOpen(false);
+                  setRedeemCode('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRedeem}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white rounded-lg transition-colors font-medium"
+              >
+                確認兌換
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default UserDashboard; 
+export default UserDashboard;

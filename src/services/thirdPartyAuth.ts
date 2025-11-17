@@ -105,11 +105,7 @@ export const handleLineLogin = async (): Promise<void> => {
     lineAuthUrl.searchParams.set('redirect_uri', config.line.redirectUri);
     lineAuthUrl.searchParams.set('scope', config.line.scope);
     lineAuthUrl.searchParams.set('state', state);
-    
-    console.log('LINE 登入 URL:', lineAuthUrl.toString());
-    console.log('重定向 URI:', config.line.redirectUri);
-    console.log('使用的 APP_URL:', getAppBase());
-    
+
     window.location.href = lineAuthUrl.toString();
   } catch (error) {
     console.error('LINE 登入初始化失敗:', error);
@@ -161,6 +157,12 @@ export const handleAuthCallback = async (): Promise<any> => {
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     const provider = getThirdPartyType();
+
+    console.log('=== handleAuthCallback Debug ===');
+    console.log('Code:', code?.substring(0, 20) + '...');
+    console.log('State:', state);
+    console.log('Provider:', provider);
+
     if (!code) {
       throw new Error('未收到授權碼');
     }
@@ -170,8 +172,11 @@ export const handleAuthCallback = async (): Promise<any> => {
     if (!provider) {
       throw new Error('無法識別第三方登入類型');
     }
-    // 呼叫後端 API 處理授權碼，並傳遞提供者類型
+
+    console.log('準備呼叫後端 API...');
+    // 呼叫後端 API 處理授權碼,並傳遞提供者類型
     const response = await handleThirdPartyCallback(code, state, provider);
+    console.log('後端回應:', response.data);
     // 明確回傳 success 狀態與錯誤訊息
     if (response.data && response.data.success) {
       return response.data;

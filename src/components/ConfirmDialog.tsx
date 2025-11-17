@@ -77,7 +77,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
         {/* Content */}
         <div className="p-6">
-          <p className="text-gray-700 leading-relaxed">{message}</p>
+          <p className="text-gray-700 leading-relaxed whitespace-pre-line">{message}</p>
           {extra && (
             <div className="mt-4">{extra}</div>
           )}

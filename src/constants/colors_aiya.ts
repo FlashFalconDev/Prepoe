@@ -85,6 +85,45 @@ export const AI_COLORS = {
   gradientReverse: 'bg-gradient-to-br from-pink-300 to-pink-200',
 } as const;
 
+// 增強版顏色配置（用於 Audio 等進階頁面）
+export const ENHANCED_COLORS = {
+  // 背景顏色
+  bg: 'bg-pink-50',
+  bgLight: 'bg-pink-25',
+  bgLighter: 'bg-pink-50/50',
+  bgHover: 'bg-pink-100',
+
+  // 文字顏色
+  text: 'text-pink-400',
+  textLight: 'text-pink-300',
+
+  // 圖標顏色
+  iconLight: 'text-pink-300',
+
+  // 邊框顏色
+  border: 'border-pink-300',
+  borderLight: 'border-pink-200',
+
+  // 按鈕樣式
+  button: 'bg-pink-300 text-white hover:bg-pink-400',
+  buttonOutline: 'border-2 border-pink-300 text-pink-400 hover:bg-pink-50',
+  buttonGradient: 'bg-gradient-to-r from-pink-300 to-pink-400 text-white',
+
+  // 漸變
+  gradient: 'bg-gradient-to-br from-pink-200 to-pink-300',
+  gradientLight: 'bg-gradient-to-br from-pink-100 to-pink-200',
+
+  // 狀態顏色
+  statusSelected: 'bg-pink-100 text-pink-600',
+
+  // 懸停效果
+  hover: {
+    bg: 'hover:bg-pink-50',
+    border: 'hover:border-pink-300',
+    shadow: 'hover:shadow-lg hover:shadow-pink-100',
+  }
+} as const;
+
 // 使用範例和說明
 export const COLOR_USAGE = {
   ai: {

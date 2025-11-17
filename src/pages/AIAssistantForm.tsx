@@ -284,49 +284,10 @@ const AIAssistantForm: React.FC = () => {
           {/* AI設定 */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">AI設定</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 創意度 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  創意度 (Temperature)
-                </label>
-                <div className="space-y-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={formData.temperature}
-                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>保守 (0.0)</span>
-                    <span className="font-medium">{formData.temperature}</span>
-                    <span>創意 (1.0)</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* 最大回應長度 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  最大回應長度 (Tokens)
-                </label>
-                <input
-                  type="number"
-                  min="100"
-                  max="4000"
-                  step="100"
-                  value={formData.max_tokens}
-                  onChange={(e) => handleInputChange('max_tokens', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-
+            <div className="space-y-4">
               {/* 系統提示詞 */}
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   系統提示詞 <span className="text-red-500">*</span>
                 </label>
@@ -335,7 +296,7 @@ const AIAssistantForm: React.FC = () => {
                   onChange={(e) => handleInputChange('system_prompt', e.target.value)}
                   rows={6}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="定義AI助理的角色、行為和回答風格..."
+                  placeholder="你是E神,喜歡用文言文回話"
                   required
                 />
                 <p className="mt-2 text-sm text-gray-500">
@@ -390,7 +351,7 @@ const AIAssistantForm: React.FC = () => {
           <div className="flex justify-end space-x-4">
             <button
               type="button"
-              onClick={() => navigate('/ai-service')}
+              onClick={() => navigate('/provider/ai-service')}
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               取消

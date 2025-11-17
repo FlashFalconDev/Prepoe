@@ -46,6 +46,7 @@ const UserEvent = React.lazy(() => import('./pages/user/UserEvent'));
 const UserArticles = React.lazy(() => import('./pages/user/UserArticles'));
 const EventJoin = React.lazy(() => import('./pages/user/EventJoin'));
 const MentorDetail = React.lazy(() => import('./pages/user/MentorDetail'));
+const UserViews = React.lazy(() => import('./pages/user/UserViews'));
 
 // 載入中組件
 const LoadingSpinner = () => (
@@ -98,7 +99,7 @@ function App() {
                           <Route path="/ai-service/assistants/:assistantId/documents/create" element={<DocumentForm />} />
                           
                           <Route path="/customer-service" element={<Chat />} />
-                          <Route path="/settings" element={<Settings />} />
+                          <Route path="/profile" element={<Settings />} />
                           <Route path="/activity-settings" element={<ActivitySettings />} />
                           <Route path="/survey-statistics" element={<SurveyStatistics />} />
                           <Route path="/private-domain" element={<PrivateDomain />} />
@@ -126,6 +127,7 @@ function App() {
                           <Route path="/articles" element={<UserArticles />} />
                           <Route path="/profile" element={<UserDashboard />} />
                           <Route path="/event/join/:sku" element={<EventJoin />} />
+                          <Route path="/views" element={<UserViews />} />
                         </Routes>
                       </Suspense>
                     </Layout>

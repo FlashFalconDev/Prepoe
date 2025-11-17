@@ -78,6 +78,19 @@ export interface ChatSession {
     content: string;
     sender_type: 'customer' | 'agent' | 'ai' | 'member' | 'system';
     created_at: string;
+    emotion?: number;
+    urgency?: number;
+    sales_opportunities?: number;
+  };
+  emotion_stats?: {
+    recent_average_emotion: number;
+    recent_average_urgency: number;
+    recent_average_sales_opportunities: number;
+    recent_message_count: number;
+    last_emotion: number;
+    last_urgency: number;
+    last_sales_opportunities: number;
+    last_emotion_at: string;
   };
   source_platform?: string; // 來源平台：line, facebook, instagram, web
   // 保持向後兼容的字段
@@ -93,11 +106,12 @@ export interface ChatMessage {
   message?: string; // 保留向後兼容
   content?: string; // 新的主要字段
   message_type: 'text' | 'image' | 'file';
-  sender_type: 'customer' | 'agent' | 'ai' | 'system';
+  sender_type: 'customer' | 'agent' | 'ai' | 'system' | 'member';
   timestamp: string;
   self?: boolean; // 標記是否為自己的訊息
   is_read?: boolean; // 是否已讀
   created_at?: string; // 創建時間
+  summary?: string | null; // 訊息摘要
 }
 
 export interface CreatePlatformRequest {

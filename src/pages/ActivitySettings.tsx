@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '../hooks/useToast';
 import { useConfirm } from '../hooks/useConfirm';
+import { useAuth } from '../contexts/AuthContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import ReferrerOrdersModal from '../components/ReferrerOrdersModal';
+import EventParticipantsModal from '../components/EventParticipantsModal';
+import DynamicFormFieldBuilder from '../components/DynamicFormFieldBuilder';
 import { AI_COLORS } from '../constants/colors';
-import { 
+import {
   getItemEventItems,
   getItemEventItemDetail,
   createItemEventItem,
@@ -12,22 +16,34 @@ import {
   deleteItemEventItem,
   getItemEventStatistics,
   refreshItemEventStatistics,
-  createEventJoinUrl
+  createEventJoinUrl,
+  batchCreateFormFields,
+  syncFormFields,
+  uploadFile,
+  FormField,
+  deleteEventImage,
+  reorderEventImages
 } from '../config/api';
 
 // 使用新的 ItemEvent 介面
-import type { 
-  ItemEventItem, 
+import type {
+  ItemEventItem,
   ItemEventStatistics,
   SingleResponse,
-  PaginatedResponse
+  PaginatedResponse,
+  ItemImageUpload
 } from '../config/api';
 
 const ActivitySettings: React.FC = () => {
   console.log('🎯 ActivitySettings 組件已載入');
-  
+
   const { showSuccess, showError } = useToast();
   const { confirm, isOpen, options, handleConfirm, handleCancel } = useConfirm();
+  const { user } = useAuth();
+
+  // 過濾掉預設欄位的輔助函數
+  const isDefaultField = (fieldId: string | number) => ['name', 'email', 'phone'].includes(String(fieldId));
+  const filterDefaultFields = (fields: FormField[]) => fields.filter(f => !isDefaultField(String(f.id)));
   
   // 狀態管理
   const [activeTab, setActiveTab] = useState<'modules' | 'events' | 'registrations' | 'statistics'>('events');
@@ -40,11 +56,26 @@ const ActivitySettings: React.FC = () => {
   // 模態框狀態
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ItemEventItem | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 推薦訂單彈窗狀態
+  const [showReferrerOrdersModal, setShowReferrerOrdersModal] = useState(false);
+  const [selectedEventForOrders, setSelectedEventForOrders] = useState<ItemEventItem | null>(null);
+
+  // 參與者彈窗狀態
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [selectedEventForParticipants, setSelectedEventForParticipants] = useState<ItemEventItem | null>(null);
+
+  // 圖片查看器狀態
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [viewingImageUrl, setViewingImageUrl] = useState<string>('');
   
   const [eventForm, setEventForm] = useState({
     name: '',
     description: '',
     base_price: 0,
+    earlyBirdConfig: undefined as { enabled: boolean; endDate: string; price?: number } | undefined,
+    earlyBird: undefined as { enabled: boolean; endDate: string; price?: number; isActive?: boolean } | undefined,
     start_time: '',
     end_time: '',
     location: '',
@@ -53,19 +84,26 @@ const ActivitySettings: React.FC = () => {
     max_participants_per_user: 1,
     use_check_in: true,
     event_status: 'draft' as 'draft' | 'registration_open' | 'registration_closed' | 'in_progress' | 'completed' | 'cancelled',
-    form_fields: [] as any[],
+    form_fields: [] as FormField[],
     tags: [] as string[],
     main_image_file: undefined as File | undefined
   });
 
   // 圖片上傳相關狀態
-  const [mainImagePreview, setMainImagePreview] = useState<string>('');
-  const [isDragOver, setIsDragOver] = useState(false);
-  const mainImageRef = useRef<HTMLInputElement>(null);
+  const [additionalImages, setAdditionalImages] = useState<ItemImageUpload[]>([]);
+  const additionalImagesRef = useRef<HTMLInputElement>(null);
 
   // 標籤相關狀態
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+
+  // 早鳥價設定彈窗狀態
+  const [showBasePriceEarlyBirdModal, setShowBasePriceEarlyBirdModal] = useState(false);
+  const [basePriceEarlyBirdForm, setBasePriceEarlyBirdForm] = useState({
+    enabled: false,
+    price: 0,
+    endDate: ''
+  });
 
 
 
@@ -148,33 +186,286 @@ const ActivitySettings: React.FC = () => {
 
   // 處理活動表單提交
   const handleEventSubmit = async () => {
+    // 防止重複提交
+    if (isSubmitting) {
+      return;
+    }
+
     try {
+      setIsSubmitting(true);
+
       if (editingEvent) {
         // 更新活動
-        const response = await updateItemEventItem(editingEvent.id, eventForm);
+        const updateData: any = { ...eventForm };
+
+        // 移除舊的 main_image_file 欄位
+        delete updateData.main_image_file;
+
+        // 處理圖片上傳
+        const imagesToUpload = additionalImages.filter(img => img.file && !img.uploaded);
+        const uploadedImagesPks: Array<{ Static_Usage_Record: number; order: number }> = [];
+
+        // 先收集已上傳的圖片 pk
+        additionalImages.forEach((img, index) => {
+          if (img.Static_Usage_Record && img.uploaded) {
+            uploadedImagesPks.push({
+              Static_Usage_Record: img.Static_Usage_Record,
+              order: index
+            });
+          }
+        });
+
+        // 上傳新圖片
+        if (imagesToUpload.length > 0) {
+          showSuccess(`正在上傳 ${imagesToUpload.length} 張圖片...`, '請稍候');
+
+          for (const image of imagesToUpload) {
+            try {
+              // 標記為上傳中
+              setAdditionalImages(prev =>
+                prev.map(img => img.id === image.id ? { ...img, uploading: true } : img)
+              );
+
+              // 上傳檔案
+              const uploadResult = await uploadFile(image.file!);
+              if (uploadResult.success) {
+                // 保存到 uploadedImagesPks
+                uploadedImagesPks.push({
+                  Static_Usage_Record: uploadResult.data.Static_Usage_Record_pk,
+                  order: image.order
+                });
+
+                // 標記為已上傳
+                setAdditionalImages(prev =>
+                  prev.map(img =>
+                    img.id === image.id
+                      ? { ...img, uploading: false, uploaded: true, Static_Usage_Record: uploadResult.data.Static_Usage_Record_pk }
+                      : img
+                  )
+                );
+              } else {
+                showError(`圖片 ${image.order + 1} 上傳失敗`, uploadResult.message);
+                setAdditionalImages(prev =>
+                  prev.map(img => img.id === image.id ? { ...img, uploading: false } : img)
+                );
+              }
+            } catch (error: any) {
+              console.error('圖片上傳錯誤:', error);
+              showError(`圖片 ${image.order + 1} 上傳失敗`, error.message);
+              setAdditionalImages(prev =>
+                prev.map(img => img.id === image.id ? { ...img, uploading: false } : img)
+              );
+            }
+          }
+
+          showSuccess('圖片上傳完成', `成功上傳 ${imagesToUpload.length} 張圖片`);
+        }
+
+        // 重新排序並準備圖片資料
+        const sortedImages = uploadedImagesPks
+          .sort((a, b) => a.order - b.order)
+          .map((img, index) => ({
+            Static_Usage_Record: img.Static_Usage_Record,
+            order: index
+          }));
+
+        // 所有圖片都放在 images 陣列中 (第一張即為主圖)
+        if (sortedImages.length > 0) {
+          updateData.images = sortedImages;
+        } else {
+          updateData.images = [];
+        }
+
+        const response = await updateItemEventItem(editingEvent.id, updateData);
         if (response.success) {
           showSuccess('更新成功', '活動已更新');
+
+          // 使用 sync API 同步表單欄位 (智能判斷增刪改，過濾掉預設欄位)
+          const customFields = filterDefaultFields(eventForm.form_fields);
+          try {
+            const formFieldsResponse = await syncFormFields(editingEvent.id, {
+              fields: customFields.map(field => {
+                // 判斷是否為前端臨時 id（以 field_ 開頭的是新建欄位）
+                const isNewField = typeof field.id === 'string' && field.id.startsWith('field_');
+
+                return {
+                  ...(isNewField ? {} : { id: field.id }), // 新欄位不傳 id，已存在的欄位傳 id
+                  field_type: field.type,
+                  label: field.label,
+                  placeholder: field.placeholder,
+                  required: field.required,
+                  order: field.order,
+                  multiSelectConfig: field.multiSelectConfig,
+                  options: field.options?.map((opt, optIndex) => {
+                    const isNewOption = typeof opt.id === 'string' && opt.id.startsWith('option_');
+                    return {
+                      ...(isNewOption ? {} : { id: opt.id }),
+                      label: opt.label,
+                      price: opt.price || 0,
+                      earlyBirdPrice: opt.earlyBirdPrice,
+                      order: optIndex,
+                      conditionalFields: opt.conditionalFields?.map((cf, cfIndex) => {
+                        const isNewConditional = typeof cf.id === 'string' && cf.id.startsWith('conditional_');
+                        return {
+                          ...(isNewConditional ? {} : { id: cf.id }),
+                          field_type: cf.type,
+                          label: cf.label,
+                          placeholder: cf.placeholder,
+                          required: cf.required,
+                          order: cfIndex
+                        };
+                      })
+                    };
+                  })
+                };
+              })
+            });
+
+            if (formFieldsResponse.success) {
+              console.log('表單欄位已同步:', formFieldsResponse.data);
+              const stats = formFieldsResponse.data.stats;
+              if (stats) {
+                showSuccess('表單欄位已同步',
+                  `創建 ${stats.fields_created || 0} 個、更新 ${stats.fields_updated || 0} 個、刪除 ${stats.fields_deleted || 0} 個欄位`
+                );
+              }
+            }
+          } catch (error: any) {
+            console.error('同步表單欄位失敗:', error);
+            showError('表單欄位同步失敗', error.message || '請稍後再試');
+          }
         } else {
           showError('更新失敗', response.message);
           return;
         }
       } else {
         // 創建新活動
-        const response = await createItemEventItem(eventForm);
+        const createData: any = { ...eventForm };
+
+        // 移除 main_image_file 欄位
+        delete createData.main_image_file;
+
+        // 處理圖片上傳
+        const imagesToUpload = additionalImages.filter(img => img.file && !img.uploaded);
+        const uploadedImagesPks: Array<{ Static_Usage_Record: number; order: number }> = [];
+
+        // 上傳新圖片
+        if (imagesToUpload.length > 0) {
+          showSuccess(`正在上傳 ${imagesToUpload.length} 張圖片...`, '請稍候');
+
+          for (const image of imagesToUpload) {
+            try {
+              // 標記為上傳中
+              setAdditionalImages(prev =>
+                prev.map(img => img.id === image.id ? { ...img, uploading: true } : img)
+              );
+
+              // 上傳檔案
+              const uploadResult = await uploadFile(image.file!);
+              if (uploadResult.success) {
+                // 保存到 uploadedImagesPks
+                uploadedImagesPks.push({
+                  Static_Usage_Record: uploadResult.data.Static_Usage_Record_pk,
+                  order: image.order
+                });
+
+                // 標記為已上傳
+                setAdditionalImages(prev =>
+                  prev.map(img =>
+                    img.id === image.id
+                      ? { ...img, uploading: false, uploaded: true, Static_Usage_Record: uploadResult.data.Static_Usage_Record_pk }
+                      : img
+                  )
+                );
+              } else {
+                showError(`圖片 ${image.order + 1} 上傳失敗`, uploadResult.message);
+                setAdditionalImages(prev =>
+                  prev.map(img => img.id === image.id ? { ...img, uploading: false } : img)
+                );
+              }
+            } catch (error: any) {
+              console.error('圖片上傳錯誤:', error);
+              showError(`圖片 ${image.order + 1} 上傳失敗`, error.message);
+              setAdditionalImages(prev =>
+                prev.map(img => img.id === image.id ? { ...img, uploading: false } : img)
+              );
+            }
+          }
+
+          showSuccess('圖片上傳完成', `成功上傳 ${imagesToUpload.length} 張圖片`);
+        }
+
+        // 重新排序並準備圖片資料
+        const sortedImages = uploadedImagesPks
+          .sort((a, b) => a.order - b.order)
+          .map((img, index) => ({
+            Static_Usage_Record: img.Static_Usage_Record,
+            order: index
+          }));
+
+        // 所有圖片都放在 images 陣列中 (第一張即為主圖)
+        if (sortedImages.length > 0) {
+          createData.images = sortedImages;
+        }
+
+        const response = await createItemEventItem(createData);
         if (response.success) {
+          // 後端回應格式: { event_id: number, event: { id, name, sku } }
+          const eventId = (response.data as any).event_id || (response.data as any).event?.id || response.data.id;
           showSuccess('創建成功', '活動已創建');
+
+          // 如果有表單欄位,批量創建 (過濾掉預設欄位)
+          const customFields = filterDefaultFields(eventForm.form_fields);
+          if (customFields.length > 0) {
+            try {
+              const formFieldsResponse = await batchCreateFormFields(eventId, {
+                fields: customFields.map(field => ({
+                  field_type: field.type,
+                  label: field.label,
+                  placeholder: field.placeholder,
+                  required: field.required,
+                  order: field.order,
+                  multiSelectConfig: field.multiSelectConfig,
+                  options: field.options?.map(opt => ({
+                    label: opt.label,
+                    price: opt.price || 0,
+                    earlyBirdPrice: opt.earlyBirdPrice,
+                    order: 0,
+                    conditionalFields: opt.conditionalFields?.map(cf => ({
+                      field_type: cf.type,
+                      label: cf.label,
+                      placeholder: cf.placeholder,
+                      required: cf.required,
+                      order: cf.order
+                    }))
+                  }))
+                }))
+              });
+
+              if (formFieldsResponse.success) {
+                console.log('表單欄位已創建:', formFieldsResponse.data);
+                showSuccess('表單欄位已創建', `成功建立 ${formFieldsResponse.data.stats.fields_count} 個欄位`);
+              }
+            } catch (error: any) {
+              console.error('批量創建表單欄位失敗:', error);
+              showError('表單欄位創建失敗', error.message || '請稍後再試');
+            }
+          }
         } else {
           showError('創建失敗', response.message);
           return;
         }
       }
-      
+
       setShowEventModal(false);
       setEditingEvent(null);
+      setAdditionalImages([]); // 重置其他圖片
       setEventForm({
         name: '',
         description: '',
         base_price: 0,
+        earlyBirdConfig: undefined,
+        earlyBird: undefined,
         start_time: getDefaultStartTime(),
         end_time: getDefaultEndTime(),
         location: '',
@@ -187,12 +478,14 @@ const ActivitySettings: React.FC = () => {
         tags: [],
         main_image_file: undefined
       });
-      setMainImagePreview('');
+      setAdditionalImages([]); // 重置圖片列表
       setTagInput('');
       setShowTagSuggestions(false);
       loadEvents();
     } catch (error: any) {
       showError('操作失敗', error.message || '未知錯誤');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -232,7 +525,8 @@ const ActivitySettings: React.FC = () => {
         return;
       }
 
-      const joinUrl = createEventJoinUrl(event.sku);
+      // 如果使用者已登入，則在連結中加入 referrer 參數（使用 member_card）
+      const joinUrl = createEventJoinUrl(event.sku, user?.member_card);
       
       // 使用 Clipboard API 複製連結
       if (navigator.clipboard && window.isSecureContext) {
@@ -319,61 +613,95 @@ const ActivitySettings: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // 處理主圖上傳
-  const handleMainImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  // 處理其他圖片上傳
+  const handleAdditionalImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
-    const file = files[0];
-    processImageFile(file);
+
+    // 檢查圖片數量限制(最多 6 張)
+    const MAX_IMAGES = 6;
+    const currentImageCount = additionalImages.length;
+    const newFilesCount = files.length;
+    const totalCount = currentImageCount + newFilesCount;
+
+    if (totalCount > MAX_IMAGES) {
+      showError('圖片數量超過限制', `最多只能上傳 ${MAX_IMAGES} 張圖片，目前已有 ${currentImageCount} 張`);
+      e.target.value = '';
+      return;
+    }
+
+    const newImages: ItemImageUpload[] = Array.from(files).map((file, index) => {
+      const reader = new FileReader();
+      const tempId = `temp_${Date.now()}_${index}`;
+      const newImage: ItemImageUpload = {
+        id: tempId,
+        file,
+        order: additionalImages.length + index,
+        preview: '',
+        uploading: false,
+        uploaded: false
+      };
+
+      reader.onload = (ev) => {
+        if (typeof ev.target?.result === 'string') {
+          setAdditionalImages(prev =>
+            prev.map(img => img.id === tempId ? { ...img, preview: ev.target!.result as string } : img)
+          );
+        }
+      };
+      reader.readAsDataURL(file);
+
+      return newImage;
+    });
+
+    setAdditionalImages(prev => [...prev, ...newImages]);
     e.target.value = '';
   };
 
-  // 處理拖拽上傳
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
+  // 移除其他圖片
+  const removeAdditionalImage = async (imageId: string | number) => {
+    const image = additionalImages.find(img => img.id === imageId);
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
+    // 如果是已上傳的圖片(有數字 id),需要呼叫 API 刪除
+    if (image && typeof image.id === 'number' && typeof imageId === 'number') {
+      try {
+        const confirmed = await confirm({
+          title: '確認刪除',
+          message: '確定要刪除這張圖片嗎?',
+          confirmText: '刪除',
+          cancelText: '取消',
+          type: 'danger'
+        });
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      if (file.type.startsWith('image/')) {
-        processImageFile(file);
+        if (confirmed) {
+          const response = await deleteEventImage(imageId);
+          if (response.success) {
+            showSuccess('刪除成功', '圖片已刪除');
+            setAdditionalImages(prev => prev.filter(img => String(img.id) !== String(imageId)));
+          } else {
+            showError('刪除失敗', response.message);
+          }
+        }
+      } catch (error: any) {
+        showError('刪除失敗', error.message || '未知錯誤');
       }
+    } else {
+      // 臨時圖片,直接從狀態中移除
+      setAdditionalImages(prev => prev.filter(img => img.id !== imageId));
     }
   };
 
-  // 處理圖片檔案
-  const processImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      showError('檔案格式錯誤', '請選擇圖片檔案');
-      return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (typeof ev.target?.result === 'string') {
-        setMainImagePreview(ev.target.result);
-        setEventForm({ ...eventForm, main_image_file: file });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
+  // 重新排序圖片
+  const reorderAdditionalImages = (startIndex: number, endIndex: number) => {
+    setAdditionalImages(prev => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
 
-  // 移除主圖
-  const removeMainImage = () => {
-    setMainImagePreview('');
-    setEventForm({ ...eventForm, main_image_file: undefined });
+      // 更新 order
+      return result.map((img, index) => ({ ...img, order: index }));
+    });
   };
 
   // 標籤管理
@@ -387,10 +715,71 @@ const ActivitySettings: React.FC = () => {
   };
 
   const removeTag = (tagToRemove: string) => {
-    setEventForm({ 
-      ...eventForm, 
-      tags: eventForm.tags.filter(tag => tag !== tagToRemove) 
+    setEventForm({
+      ...eventForm,
+      tags: eventForm.tags.filter(tag => tag !== tagToRemove)
     });
+  };
+
+  // 早鳥優惠設定管理（活動層級，統一管理截止日期）
+  const openBasePriceEarlyBirdModal = () => {
+    // 優先使用 earlyBirdConfig（編輯時），其次使用 earlyBird（後端回傳）
+    const config = eventForm.earlyBirdConfig || eventForm.earlyBird;
+
+    // 如果後端有早鳥設定但前端沒有，需要同步到前端
+    // 這樣即使使用者沒有修改就關閉 modal，earlyBirdConfig 也會存在
+    if (eventForm.earlyBird && !eventForm.earlyBirdConfig) {
+      setEventForm({
+        ...eventForm,
+        earlyBirdConfig: {
+          enabled: eventForm.earlyBird.enabled,
+          endDate: eventForm.earlyBird.endDate,
+          price: eventForm.earlyBird.price
+        }
+      });
+    }
+
+    setBasePriceEarlyBirdForm({
+      enabled: config?.enabled || false,
+      price: config?.price || 0,
+      endDate: config?.endDate || ''
+    });
+    setShowBasePriceEarlyBirdModal(true);
+  };
+
+  const saveBasePriceEarlyBird = () => {
+    if (basePriceEarlyBirdForm.enabled) {
+      // 必須設定截止日期
+      if (!basePriceEarlyBirdForm.endDate) {
+        alert('請設定早鳥截止日期');
+        return;
+      }
+
+      // 如果設定了基本價格的早鳥價，必須小於或等於原價（等於原價表示取消早鳥）
+      if (basePriceEarlyBirdForm.price > eventForm.base_price) {
+        alert(`基本價格早鳥價 (NT$ ${basePriceEarlyBirdForm.price}) 不能大於原價 (NT$ ${eventForm.base_price})`);
+        return;
+      }
+    }
+
+    // 更新早鳥設定
+    // - 如果啟用：設定完整的早鳥資料
+    // - 如果關閉：發送 { enabled: false } 讓後端知道要關閉早鳥
+    setEventForm({
+      ...eventForm,
+      earlyBirdConfig: basePriceEarlyBirdForm.enabled ? {
+        enabled: true,
+        endDate: basePriceEarlyBirdForm.endDate,
+        // 當早鳥價格等於原價時，視為取消早鳥優惠（設為 undefined）
+        price: basePriceEarlyBirdForm.price !== eventForm.base_price ? basePriceEarlyBirdForm.price : undefined
+      } : {
+        enabled: false,
+        endDate: '',
+        price: undefined
+      }
+    });
+
+    setShowBasePriceEarlyBirdModal(false);
   };
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -484,10 +873,13 @@ const ActivitySettings: React.FC = () => {
                 <button
                   onClick={() => {
                     setEditingEvent(null);
+                    setAdditionalImages([]); // 重置圖片
                     setEventForm({
                       name: '',
                       description: '',
                       base_price: 0,
+                      earlyBirdConfig: undefined,
+                      earlyBird: undefined,
                       start_time: '',
                       end_time: '',
                       location: '',
@@ -500,7 +892,6 @@ const ActivitySettings: React.FC = () => {
                       tags: [],
                       main_image_file: undefined
                     });
-                    setMainImagePreview('');
                     setTagInput('');
                     setShowTagSuggestions(false);
                     setShowEventModal(true);
@@ -534,10 +925,13 @@ const ActivitySettings: React.FC = () => {
                 <button
                   onClick={() => {
                     setEditingEvent(null);
+                    setAdditionalImages([]); // 重置圖片
                     setEventForm({
                       name: '',
                       description: '',
                       base_price: 0,
+                      earlyBirdConfig: undefined,
+                      earlyBird: undefined,
                       start_time: getDefaultStartTime(),
                       end_time: getDefaultEndTime(),
                       location: '',
@@ -550,7 +944,6 @@ const ActivitySettings: React.FC = () => {
                       tags: [],
                       main_image_file: undefined
                     });
-                    setMainImagePreview('');
                     setTagInput('');
                     setShowTagSuggestions(false);
                     setShowEventModal(true);
@@ -567,20 +960,64 @@ const ActivitySettings: React.FC = () => {
              {!loading && filteredEvents.length > 0 && (
                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                  {filteredEvents.map((event) => (
-                   <div key={event.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                     {/* 活動主圖 */}
-                     {event.main_image && (
-                       <div className="relative h-48 bg-gray-100">
-                         <img
-                           src={event.main_image.url}
-                           alt={event.name}
-                           className="w-full h-full object-cover"
-                         />
+                   <div key={event.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                     {/* 活動主圖 (使用 images 的第一張) */}
+                     {event.images && event.images.length > 0 && event.images[0] && (
+                       <div>
+                         <div className="relative h-48 bg-gray-100">
+                           <img
+                             src={event.images[0].url}
+                             alt={event.name}
+                             className="w-full h-full object-cover cursor-pointer"
+                             onClick={() => {
+                               setViewingImageUrl(event.images![0].url);
+                               setShowImageViewer(true);
+                             }}
+                           />
+
+                           {/* 活動狀態標籤 - 移到主圖右上角 */}
+                           <div className="absolute top-2 right-2">
+                             <span className={`px-3 py-1 text-xs rounded-full font-medium shadow-lg ${
+                               event.event_status === 'draft' ? 'bg-gray-100 text-gray-700' :
+                               event.event_status === 'registration_open' ? 'bg-green-500 text-white' :
+                               event.event_status === 'registration_closed' ? 'bg-yellow-500 text-white' :
+                               event.event_status === 'in_progress' ? 'bg-blue-500 text-white' :
+                               event.event_status === 'completed' ? 'bg-purple-500 text-white' :
+                               'bg-red-500 text-white'
+                             }`}>
+                               {event.event_status_display}
+                             </span>
+                           </div>
+                         </div>
+
+                         {/* 其他圖片縮圖 */}
+                         {event.images.length > 1 && (
+                           <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                             <div className="flex gap-2 overflow-x-auto">
+                               {event.images.slice(1).map((image, index) => (
+                                 <div
+                                   key={index}
+                                   className="flex-shrink-0 w-16 h-16 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-orange-400 transition-all"
+                                   onClick={() => {
+                                     setViewingImageUrl(image.url);
+                                     setShowImageViewer(true);
+                                   }}
+                                 >
+                                   <img
+                                     src={image.url}
+                                     alt={`${event.name} - 圖片 ${index + 2}`}
+                                     className="w-full h-full object-cover"
+                                   />
+                                 </div>
+                               ))}
+                             </div>
+                           </div>
+                         )}
                        </div>
                      )}
-                     
+
                      {/* 活動資訊 */}
-                     <div className="p-6">
+                     <div className="p-6 flex flex-col flex-1">
                        <div className="flex items-start justify-between mb-3">
                          <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{event.name}</h3>
                          <div className="flex gap-1">
@@ -594,10 +1031,41 @@ const ActivitySettings: React.FC = () => {
                            <button
                              onClick={() => {
                                setEditingEvent(event);
-                                                               setEventForm({
+                               // 處理早鳥設定：如果有 earlyBird 或 earlyBirdConfig，需要格式化日期
+                               const earlyBirdData = event.earlyBirdConfig || event.earlyBird;
+                               const formattedEarlyBird = earlyBirdData ? {
+                                 ...earlyBirdData,
+                                 endDate: formatDateTimeForInput(earlyBirdData.endDate)
+                               } : undefined;
+
+                               // 處理 form_fields：將後端的 earlyBird.price 映射到前端的 earlyBirdPrice
+                               const processedFormFields = event.form_fields?.map((field: FormField) => ({
+                                 ...field,
+                                 options: field.options?.map((opt: any) => ({
+                                   ...opt,
+                                   // 如果後端有 earlyBird.price，將其映射到 earlyBirdPrice
+                                   earlyBirdPrice: opt.earlyBirdPrice !== undefined
+                                     ? opt.earlyBirdPrice
+                                     : opt.earlyBird?.price,
+                                   // 遞迴處理條件欄位
+                                   conditionalFields: opt.conditionalFields?.map((cf: any) => ({
+                                     ...cf,
+                                     options: cf.options?.map((cfOpt: any) => ({
+                                       ...cfOpt,
+                                       earlyBirdPrice: cfOpt.earlyBirdPrice !== undefined
+                                         ? cfOpt.earlyBirdPrice
+                                         : cfOpt.earlyBird?.price
+                                     }))
+                                   }))
+                                 }))
+                               })) || [];
+
+                               setEventForm({
                                   name: event.name,
                                   description: event.description,
                                   base_price: event.base_price,
+                                  earlyBirdConfig: formattedEarlyBird,
+                                  earlyBird: event.earlyBird,
                                   start_time: formatDateTimeForInput(event.start_time),
                                   end_time: formatDateTimeForInput(event.end_time),
                                   location: event.location,
@@ -606,16 +1074,25 @@ const ActivitySettings: React.FC = () => {
                                   max_participants_per_user: event.max_participants_per_user,
                                   use_check_in: event.use_check_in,
                                   event_status: event.event_status,
-                                  form_fields: event.form_fields,
+                                  form_fields: processedFormFields,
                                   tags: event.item_tags?.map(tag => tag.name) || [],
                                   main_image_file: undefined
                                 });
-                               // 設定圖片預覽
-                               if (event.main_image) {
-                                 setMainImagePreview(event.main_image.url);
+                               // 載入圖片 (第一張即為主圖)
+                               if (event.images && event.images.length > 0) {
+                                 const allImages: ItemImageUpload[] = event.images.map((img, index) => ({
+                                   id: img.id.toString(),
+                                   Static_Usage_Record: img.id,
+                                   order: index,
+                                   preview: img.url,
+                                   uploaded: true,
+                                   uploading: false
+                                 }));
+                                 setAdditionalImages(allImages);
                                } else {
-                                 setMainImagePreview('');
+                                 setAdditionalImages([]);
                                }
+
                                // 設定標籤輸入
                                setTagInput('');
                                setShowTagSuggestions(false);
@@ -645,9 +1122,9 @@ const ActivitySettings: React.FC = () => {
                            <span>{formatDateTime(event.start_time)} - {formatDateTime(event.end_time)}</span>
                          </div>
                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                           <i className="ri-user-line" style={{ fontSize: '14px' }}></i>
-                           <span>{event.min_participants} - {event.max_participants} 人</span>
-                         </div>
+                          <i className="ri-user-line" style={{ fontSize: '14px' }}></i>
+                          <span>最少 {event.min_participants} 人</span>
+                        </div>
                          <div className="flex items-center gap-2 text-sm text-gray-500">
                            <i className="ri-money-dollar-circle-line" style={{ fontSize: '14px' }}></i>
                            <span>NT$ {event.base_price}</span>
@@ -670,32 +1147,31 @@ const ActivitySettings: React.FC = () => {
                             ))}
                           </div>
                         )}
-                       
-                       {/* 活動狀態 */}
-                       <div className="flex items-center gap-2 mb-3">
-                         <span className={`px-2 py-1 text-xs rounded-full ${
-                           event.event_status === 'draft' ? 'bg-gray-100 text-gray-700' :
-                           event.event_status === 'registration_open' ? 'bg-green-100 text-green-700' :
-                           event.event_status === 'registration_closed' ? 'bg-yellow-100 text-yellow-700' :
-                           event.event_status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                           event.event_status === 'completed' ? 'bg-purple-100 text-purple-700' :
-                           'bg-red-100 text-red-700'
-                         }`}>
-                           {event.event_status_display}
-                         </span>
-                       </div>
-                       
-                       {/* 活動統計資訊 */}
-                       {event.statistics && (
-                         <div className="border-t pt-3 mt-3">
-                           <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                             <div>報名人數: {event.statistics.total_registrations}</div>
-                             <div>參與人數: {event.statistics.total_participants}</div>
-                             <div>已付款: {event.statistics.paid_registrations}</div>
-                             <div>總收入: NT$ {event.statistics.total_revenue}</div>
-                           </div>
+                       {/* 操作按鈕 - 固定在底部 */}
+                       <div className="border-t pt-3 mt-auto space-y-2">
+                         <div className="grid grid-cols-2 gap-2">
+                           <button
+                             onClick={() => {
+                               setSelectedEventForParticipants(event);
+                               setShowParticipantsModal(true);
+                             }}
+                             className="px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                           >
+                             <i className="ri-user-line" style={{ fontSize: '16px' }}></i>
+                             參與者
+                           </button>
+                           <button
+                             onClick={() => {
+                               setSelectedEventForOrders(event);
+                               setShowReferrerOrdersModal(true);
+                             }}
+                             className={`px-3 py-2 ${AI_COLORS.button} text-white text-sm rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2`}
+                           >
+                             <i className="ri-file-list-3-line" style={{ fontSize: '16px' }}></i>
+                             訂單
+                           </button>
                          </div>
-                       )}
+                       </div>
                      </div>
                    </div>
                  ))}
@@ -769,15 +1245,38 @@ const ActivitySettings: React.FC = () => {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">基本價格</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={eventForm.base_price}
-                        onChange={(e) => setEventForm({ ...eventForm, base_price: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="0.00"
-                        required
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600 flex-shrink-0">NT$</span>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={eventForm.base_price}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setEventForm({
+                              ...eventForm,
+                              base_price: value === '' ? 0 : parseInt(value) || 0
+                            });
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          placeholder="輸入活動基本價格（可以為0）"
+                          required
+                        />
+                        {/* 早鳥優惠設定按鈕 */}
+                        <button
+                          type="button"
+                          onClick={openBasePriceEarlyBirdModal}
+                          className={`p-2 rounded transition-colors flex-shrink-0 ${
+                            eventForm.earlyBirdConfig?.enabled
+                              ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                              : 'text-gray-400 hover:text-orange-600 hover:bg-orange-50'
+                          }`}
+                          title={eventForm.earlyBirdConfig?.enabled ? '早鳥優惠已設定' : '設定早鳥優惠（含截止日期）'}
+                        >
+                          <i className="ri-vip-crown-line text-lg"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
                   
@@ -889,9 +1388,9 @@ const ActivitySettings: React.FC = () => {
                     <textarea
                       value={eventForm.description}
                       onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      placeholder="輸入活動描述"
-                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent whitespace-pre-wrap"
+                      placeholder="輸入活動描述（支援換行）"
+                      rows={8}
                       required
                     />
                   </div>
@@ -932,7 +1431,7 @@ const ActivitySettings: React.FC = () => {
                         required
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">最大參與人數</label>
                       <input
@@ -944,7 +1443,7 @@ const ActivitySettings: React.FC = () => {
                         required
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">每人最大參與次數</label>
                       <input
@@ -958,80 +1457,100 @@ const ActivitySettings: React.FC = () => {
                     </div>
                   </div>
                   
+                  {/* 活動圖片上傳 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">主圖上傳</label>
-                    <div className="flex items-center gap-4">
-                      {/* 圖片預覽或上傳區域 */}
-                      {mainImagePreview ? (
-                        <div className="relative group">
-                          <img
-                            src={mainImagePreview}
-                            alt="活動主圖預覽"
-                            className="w-32 h-24 object-cover rounded-lg border border-gray-300"
-                          />
-                          <button
-                            type="button"
-                            onClick={removeMainImage}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
-                            title="移除圖片"
-                          >
-                            ×
-                          </button>
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={() => mainImageRef.current?.click()}
-                              className="opacity-0 group-hover:opacity-100 bg-white text-gray-700 px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-100 transition-all duration-200"
-                            >
-                              更換圖片
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          className={`w-32 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${
-                            isDragOver 
-                              ? 'border-orange-500 bg-orange-50 text-orange-600' 
-                              : 'border-gray-300 bg-gray-50 text-gray-400 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-500'
-                          }`}
-                          onClick={() => mainImageRef.current?.click()}
-                          onDragOver={handleDragOver}
-                          onDragLeave={handleDragLeave}
-                          onDrop={handleDrop}
-                        >
-                          <i className="ri-image-line text-2xl mb-1"></i>
-                          <span className="text-xs text-center">
-                            {isDragOver ? '放開上傳' : '點擊或拖拽上傳'}
-                          </span>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">活動圖片</label>
+                    <div className="space-y-3">
+                      {/* 已上傳的圖片預覽 */}
+                      {additionalImages.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {additionalImages.map((image, index) => (
+                            <div key={image.id} className="relative group bg-gray-50 rounded-lg border border-gray-200 p-2">
+                              {/* 圖片預覽 */}
+                              <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mb-2">
+                                {image.preview ? (
+                                  <img
+                                    src={image.preview}
+                                    alt={`圖片 ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <i className="ri-image-line text-gray-400 text-2xl"></i>
+                                  </div>
+                                )}
+
+                                {/* 主圖標示 */}
+                                {index === 0 && (
+                                  <div className="absolute top-1 left-1 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                                    主圖
+                                  </div>
+                                )}
+
+                                {/* 上傳中遮罩 */}
+                                {image.uploading && (
+                                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                                    <div className="text-white text-xs">上傳中...</div>
+                                  </div>
+                                )}
+
+                                {/* 刪除按鈕 */}
+                                <button
+                                  type="button"
+                                  onClick={() => removeAdditionalImage(image.id!)}
+                                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                                  title="刪除圖片"
+                                >
+                                  ×
+                                </button>
+                              </div>
+
+                              {/* 排序控制 */}
+                              <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                                <span>順序: {index + 1}</span>
+                                <div className="flex gap-1">
+                                  {index > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => reorderAdditionalImages(index, index - 1)}
+                                      className="p-1 hover:bg-gray-200 rounded"
+                                      title="向前移動"
+                                    >
+                                      <i className="ri-arrow-up-s-line"></i>
+                                    </button>
+                                  )}
+                                  {index < additionalImages.length - 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => reorderAdditionalImages(index, index + 1)}
+                                      className="p-1 hover:bg-gray-200 rounded"
+                                      title="向後移動"
+                                    >
+                                      <i className="ri-arrow-down-s-line"></i>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
-                      
-                      {/* 上傳說明 */}
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">
-                          {mainImagePreview ? '已選擇圖片' : '上傳活動主圖'}
-                        </p>
-                        <p className="text-xs text-gray-500 mb-2">
-                          支援 jpg, png, gif, webp 格式，建議尺寸 16:9
-                        </p>
-                        {!mainImagePreview && (
-                          <div className="space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => mainImageRef.current?.click()}
-                              className="px-3 py-1 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700 transition-colors"
-                            >
-                              選擇圖片
-                            </button>
-                            <p className="text-xs text-gray-400">
-                              或直接拖拽圖片到此區域
-                            </p>
-                          </div>
-                        )}
-                      </div>
+
+                      {/* 上傳按鈕 */}
+                      <button
+                        type="button"
+                        onClick={() => additionalImagesRef.current?.click()}
+                        className="inline-flex items-center gap-2 px-4 py-2 border-2 border-dashed border-orange-400 text-orange-600 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all duration-200"
+                      >
+                        <i className="ri-add-line text-xl"></i>
+                        <span className="text-sm font-medium">新增圖片</span>
+                      </button>
+                      <p className="text-xs text-gray-500 mt-2">
+                        支援 jpg, png, gif, webp 格式，最多上傳 6 張圖片(第一張為主圖)
+                      </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
@@ -1044,20 +1563,34 @@ const ActivitySettings: React.FC = () => {
                       啟用報到功能
                     </label>
                   </div>
-                  
+
+                  {/* 表單欄位編輯器 */}
+                  <div className="pt-4 border-t">
+                    <DynamicFormFieldBuilder
+                      fields={eventForm.form_fields}
+                      onChange={(updatedFields) => setEventForm({ ...eventForm, form_fields: updatedFields })}
+                      earlyBirdConfig={eventForm.earlyBirdConfig}
+                    />
+                  </div>
+
                   <div className="flex gap-3 pt-4">
                     <button
                       type="button"
                       onClick={() => setShowEventModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       取消
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                      {editingEvent ? '更新' : '建立'}
+                      {isSubmitting && (
+                        <i className="ri-loader-4-line animate-spin"></i>
+                      )}
+                      {isSubmitting ? '處理中...' : (editingEvent ? '更新' : '建立')}
                     </button>
                   </div>
                 </form>
@@ -1066,13 +1599,14 @@ const ActivitySettings: React.FC = () => {
           </div>
         )}
 
-        {/* 隱藏的檔案輸入 */}
+        {/* 隱藏的圖片輸入（支援多選）*/}
         <input
           type="file"
           accept="image/*"
+          multiple
           style={{ display: 'none' }}
-          ref={mainImageRef}
-          onChange={handleMainImageUpload}
+          ref={additionalImagesRef}
+          onChange={handleAdditionalImagesUpload}
         />
 
         {/* 確認對話框 */}
@@ -1086,7 +1620,196 @@ const ActivitySettings: React.FC = () => {
           onConfirm={handleConfirm}
           onCancel={handleCancel}
         />
+
+        {/* 推薦訂單彈窗 */}
+        {selectedEventForOrders && (
+          <ReferrerOrdersModal
+            isOpen={showReferrerOrdersModal}
+            onClose={() => {
+              setShowReferrerOrdersModal(false);
+              setSelectedEventForOrders(null);
+            }}
+            itemId={selectedEventForOrders.id}
+            itemName={selectedEventForOrders.name}
+          />
+        )}
+
+        {/* 早鳥優惠設定彈窗（活動統一管理截止日期）*/}
+        {showBasePriceEarlyBirdModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <i className="ri-vip-crown-line text-orange-600"></i>
+                  早鳥優惠設定
+                </h3>
+                <button
+                  onClick={() => setShowBasePriceEarlyBirdModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <i className="ri-close-line text-lg"></i>
+                </button>
+              </div>
+
+              {/* 說明文字 */}
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-700">
+                  💡 此設定為全活動統一管理。早鳥截止日期對基本價格及所有表單選項的早鳥價都有效。
+                </p>
+              </div>
+
+              {/* 啟用開關 */}
+              <div className="mb-4 flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium text-gray-700">啟用早鳥優惠</span>
+                <button
+                  type="button"
+                  onClick={() => setBasePriceEarlyBirdForm({
+                    ...basePriceEarlyBirdForm,
+                    enabled: !basePriceEarlyBirdForm.enabled
+                  })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    basePriceEarlyBirdForm.enabled ? 'bg-orange-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      basePriceEarlyBirdForm.enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {basePriceEarlyBirdForm.enabled && (
+                <>
+                  {/* 截止日期（統一管理）*/}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      早鳥優惠截止時間 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={basePriceEarlyBirdForm.endDate}
+                      onChange={(e) => setBasePriceEarlyBirdForm({
+                        ...basePriceEarlyBirdForm,
+                        endDate: e.target.value
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      此截止時間適用於所有早鳥優惠
+                    </p>
+                  </div>
+
+                  {/* 原價顯示 */}
+                  <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="text-sm text-purple-700">
+                      <span className="font-medium">活動基本價格：</span>
+                      <span className="font-bold">NT$ {eventForm.base_price.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* 基本價格的早鳥價 */}
+                  {eventForm.base_price > 0 && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        基本價格早鳥優惠價（可選）
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">NT$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={eventForm.base_price}
+                          value={basePriceEarlyBirdForm.price}
+                          onChange={(e) => setBasePriceEarlyBirdForm({
+                            ...basePriceEarlyBirdForm,
+                            price: parseInt(e.target.value) || 0
+                          })}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          placeholder="設定為原價即可取消"
+                        />
+                        {basePriceEarlyBirdForm.price !== eventForm.base_price && (
+                          <button
+                            type="button"
+                            onClick={() => setBasePriceEarlyBirdForm({
+                              ...basePriceEarlyBirdForm,
+                              price: eventForm.base_price
+                            })}
+                            className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors flex-shrink-0"
+                            title="取消早鳥優惠"
+                          >
+                            移除
+                          </button>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {basePriceEarlyBirdForm.price === eventForm.base_price
+                          ? '設定為原價表示取消早鳥優惠'
+                          : `早鳥價可設定 0 ~ ${eventForm.base_price}，設定為原價 (NT$ ${eventForm.base_price}) 即可取消`}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 按鈕 */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowBasePriceEarlyBirdModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveBasePriceEarlyBird}
+                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                >
+                  確認
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 圖片查看器彈窗 */}
+      {showImageViewer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4"
+          onClick={() => setShowImageViewer(false)}
+        >
+          <div className="relative max-w-6xl max-h-full">
+            {/* 關閉按鈕 */}
+            <button
+              onClick={() => setShowImageViewer(false)}
+              className="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors"
+            >
+              <i className="ri-close-line text-3xl"></i>
+            </button>
+
+            {/* 圖片 */}
+            <img
+              src={viewingImageUrl}
+              alt="查看圖片"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 參與者管理彈窗 */}
+      {showParticipantsModal && selectedEventForParticipants && (
+        <EventParticipantsModal
+          isOpen={showParticipantsModal}
+          onClose={() => {
+            setShowParticipantsModal(false);
+            setSelectedEventForParticipants(null);
+          }}
+          eventId={selectedEventForParticipants.id}
+          eventName={selectedEventForParticipants.name}
+        />
+      )}
     </div>
   );
 };

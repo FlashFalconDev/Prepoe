@@ -41,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         { path: '/provider/assistants', icon: Bot, label: '智能助手' },
         { path: '/provider/creator', icon: Sparkles, label: 'AI創作' },
         { path: '/provider/customer-service', icon: MessageSquare, label: '客服對話' },
-        { path: '/provider/settings', icon: Settings, label: '設定' },
+        { path: '/provider/profile', icon: Settings, label: '個人設定' },
       ];
     }
   };
@@ -71,8 +71,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         return 'AI創作';
       case '/provider/creator/article':
         return '文章創作';
-      case '/provider/settings':
-        return '設定';
+      case '/provider/profile':
+        return '個人設定';
       case '/provider/activity-settings':
         return '活動設定';
       case '/provider/private-domain':

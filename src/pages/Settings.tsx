@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useState as useReactState } from 'react';
-import { Calendar, Clock, ShoppingCart, CreditCard, Monitor, ChevronRight, User, Star, Coins, Zap, BarChart3, Edit3, X, Users } from 'lucide-react';
+import { Calendar, Clock, ShoppingCart, CreditCard, Monitor, User, Star, Coins, Zap, BarChart3, Edit3, X, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NoPermissionDialog from '../components/NoPermissionDialog';
 import { handlePermissionRedeem } from '../utils/permissionUtils';
 import type { LucideIcon } from "lucide-react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AI_COLORS } from '../constants/colors';
 import { getMemberComplete, updateMemberDetails, type MemberComplete, type MemberDetailsUpdateData } from '../config/api';
 import { useToast } from '../hooks/useToast';
@@ -20,10 +20,11 @@ interface MoreItem {
 
 const More: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { featureFlag, checkAuth } = useAuth();
   const [showNoPermission, setShowNoPermission] = useState(false);
-  
+
   // 會員資料狀態
   const [memberData, setMemberData] = useState<MemberComplete | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,6 +143,18 @@ const More: React.FC = () => {
     loadMemberData();
   }, []);
 
+  // 檢查 URL 參數，如果有 key 則自動開啟兌換彈窗
+  useEffect(() => {
+    const keyParam = searchParams.get('key');
+    if (keyParam) {
+      setRedeemCode(keyParam);
+      setIsRedeemModalOpen(true);
+      // 清除 URL 參數，避免重複觸發
+      searchParams.delete('key');
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams]);
+
 
   const moreFunctions: MoreItem[] = [
     {
@@ -202,15 +215,10 @@ const More: React.FC = () => {
     const eventEnabled = rawEventEnabled === 1 || rawEventEnabled === '1' || rawEventEnabled === true || rawEventEnabled === 'true';
     const clickable = item.id === '1' || item.id === '2';
     const isDisabled = !clickable; // 其他項目維持不可用
-    
+
     return (
-      <button
+      <div
         key={item.id}
-        className={`flex items-center p-5 border-b border-gray-100 w-full text-left transition-colors ${
-          isDisabled 
-            ? 'opacity-50 cursor-not-allowed' 
-            : 'hover:bg-gray-50'
-        }`}
         onClick={
           isDisabled
             ? undefined
@@ -222,29 +230,17 @@ const More: React.FC = () => {
                 item.onPress && item.onPress();
               }
         }
-        disabled={isDisabled}
+        className={`flex flex-col items-center justify-center bg-white rounded-xl shadow-sm transition-all duration-200 border border-gray-100 p-6 ${
+          isDisabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : 'hover:shadow-md cursor-pointer'
+        }`}
       >
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${
-          isDisabled ? 'bg-gray-200' : AI_COLORS.bg
-        }`}>
-          <item.icon size={24} className={isDisabled ? 'text-gray-400' : AI_COLORS.text} />
+        <div className={`w-14 h-14 ${AI_COLORS.bg} rounded-xl flex items-center justify-center mb-3`}>
+          <item.icon size={28} className={AI_COLORS.text} />
         </div>
-        
-        <div className="flex-1">
-          <h3 className={`font-semibold mb-1 ${isDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
-            {item.title}
-            {/* 其他項標示即將推出；活動設定維持高亮且不加未啟用提示 */}
-            {isDisabled && <span className="text-xs text-gray-400 ml-2">(即將推出)</span>}
-          </h3>
-          {item.description && (
-            <p className={`text-sm leading-relaxed ${isDisabled ? 'text-gray-400' : 'text-gray-600'}`}>
-              {item.description}
-            </p>
-          )}
-        </div>
-        
-        <ChevronRight size={20} className={isDisabled ? 'text-gray-300' : 'text-gray-400'} />
-      </button>
+        <h3 className="font-semibold text-gray-900 text-base text-center">
+          {item.title}
+        </h3>
+      </div>
     );
   };
 
@@ -432,7 +428,7 @@ const More: React.FC = () => {
         {/* More Functions */}
         <div className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">其他功能</h2>
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {moreFunctions.map(renderMoreItem)}
           </div>
         </div>

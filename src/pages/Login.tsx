@@ -34,11 +34,17 @@ const Login: React.FC = () => {
         // 登入成功，保存用戶資訊並跳轉到原本要去的頁面
         const userData = response.data.user || { id: 1, username };
         authLogin(userData);
-        
-        // 獲取原本要去的頁面，如果沒有則跳轉到首頁
-        const from = location.state?.from?.pathname || '/';
-        const normalizedPath = normalizePath(from);
-        navigate(normalizedPath, { replace: true });
+
+        // 獲取原本要去的頁面（包含查詢參數），如果沒有則跳轉到首頁
+        const fromLocation = location.state?.from;
+        if (fromLocation) {
+          // 保留完整的路徑和查詢參數
+          const fullPath = `${fromLocation.pathname}${fromLocation.search || ''}`;
+          const normalizedPath = normalizePath(fullPath);
+          navigate(normalizedPath, { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
       }
     } catch (err: any) {
       console.error('登入失敗:', err);
@@ -53,11 +59,16 @@ const Login: React.FC = () => {
     try {
       setIsThirdPartyLoading(provider);
       setError('');
-      
-      // 保存原始路徑到 sessionStorage，因為第三方登入會跳轉到外部頁面
-      const from = location.state?.from?.pathname || '/';
-      const normalizedPath = normalizePath(from);
-      sessionStorage.setItem('redirectAfterLogin', normalizedPath);
+
+      // 保存原始路徑和查詢參數到 sessionStorage，因為第三方登入會跳轉到外部頁面
+      const fromLocation = location.state?.from;
+      if (fromLocation) {
+        const fullPath = `${fromLocation.pathname}${fromLocation.search || ''}`;
+        const normalizedPath = normalizePath(fullPath);
+        sessionStorage.setItem('redirectAfterLogin', normalizedPath);
+      } else {
+        sessionStorage.setItem('redirectAfterLogin', '/');
+      }
       
       await authFunction();
       

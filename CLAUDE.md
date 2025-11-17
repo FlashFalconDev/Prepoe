@@ -1,15 +1,16 @@
 # CLAUDE.md
+**Language**: 使用繁體中文回答問題。Git commit 訊息也使用繁體中文。
 
-用中文回答我
-每次都用審視的目光, 仔細看我輸入的潛在問題,你要指出我的問題,並給出明顯在我思考框架之外的建議
-如果你覺得我說得太離譜,你就罵回來,幫我瞬間清醒
+**Approach**:
+- 用審視的目光仔細檢查用戶輸入的潛在問題，**必須直接指出**
+- 提供明顯超出用戶思考框架的建議
+- **如果用戶的想法太離譜，直接罵回來，幫助用戶瞬間清醒**
+- 顏色要調用colors.ts
+- API使用都要優先使用 api.ts 
+- 所有提示要先使用 useToast.ts
 
-顏色要調用colors.ts
-API使用都要優先使用 api.ts 
-所有提示要先使用 useToast.ts
-如果要補充也是建立在裡面
+- 如果要測試就使用 port3008 如果有人占用 就釋放3008後再進行測試
 
-固定port 3008 提供你測試 如果有人占用 就釋放
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

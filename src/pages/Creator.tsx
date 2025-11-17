@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Volume2, Camera, Sparkles, Play, Edit3, ArrowRight } from 'lucide-react';
+import { FileText, Volume2, Camera, Sparkles, Play, Edit3, ArrowRight, CheckCircle } from 'lucide-react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { AI_COLORS } from '../constants/colors';
 import { useAuth } from '../contexts/AuthContext';
@@ -145,35 +145,34 @@ const AICreator: React.FC = () => {
 
             {/* Creation Options */}
             <div className="mb-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 gap-4 md:gap-8">
                 {creationOptions.map((option) => (
                   <div
                     key={option.id}
-                    className={`bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border-2 border-transparent hover:${AI_COLORS.border}`}
+                    className="bg-white rounded-2xl p-4 md:p-8 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-purple-500 group"
                     tabIndex={0}
                     onClick={() => handleNavigation(option.path, option.id)}
                   >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`w-16 h-16 rounded-2xl ${option.bgColor} flex items-center justify-center`}>
-                        <option.icon size={32} className={option.color} />
+                    <div className="text-center">
+                      <div className={`w-16 h-16 md:w-20 md:h-20 ${option.bgColor} rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 group-hover:scale-110 transition-transform`}>
+                        <option.icon size={32} className={`${option.color} md:w-10 md:h-10`} />
                       </div>
-                      <ArrowRight size={20} className="text-gray-400" />
-                    </div>
-                    
-                    <div className="mb-5">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{option.title}</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed mb-4">{option.description}</p>
-                      
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <h3 className="text-lg md:text-2xl font-bold text-gray-900 mb-2 md:mb-3">{option.title}</h3>
+                      <p className="text-xs md:text-base text-gray-600 mb-4 md:mb-6">{option.description}</p>
+
+                      <div className="text-left space-y-2 md:space-y-3 mb-4 md:mb-6">
                         {option.features.map((feature, index) => (
-                          <div key={index} className="flex items-start gap-2 text-sm text-gray-600">
-                            <div className={`w-1.5 h-1.5 ${AI_COLORS.bgDark} rounded-full flex-shrink-0 mt-1.5`}></div>
-                            <span className="flex-1 leading-snug">{feature}</span>
+                          <div key={index} className="flex items-start gap-2 md:gap-3">
+                            <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5 md:w-5 md:h-5" />
+                            <span className="text-xs md:text-sm text-gray-700">{feature}</span>
                           </div>
                         ))}
                       </div>
+
+                      <div className={`px-3 md:px-4 py-2 ${AI_COLORS.bg} ${AI_COLORS.text} rounded-lg text-sm md:text-base font-semibold group-hover:shadow-md transition-shadow`}>
+                        開始創作
+                      </div>
                     </div>
-                    
                   </div>
                 ))}
               </div>

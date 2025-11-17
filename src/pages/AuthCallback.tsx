@@ -24,6 +24,7 @@ const AuthCallback: React.FC = () => {
         }
         setStatus('loading');
         setMessage('正在處理登入...');
+
         // 處理第三方登入回調
         const result = await handleAuthCallback();
         if (result.success) {

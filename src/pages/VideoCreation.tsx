@@ -127,6 +127,8 @@ const VideoCreation: React.FC = () => {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [uploadMode, setUploadMode] = useState<'record' | 'upload'>('record'); // 'record' 或 'upload'
 
   // 媒體播放相關狀態
   const [playingAudio, setPlayingAudio] = useState<string>('');
@@ -156,6 +158,7 @@ const VideoCreation: React.FC = () => {
   const [availableS2VModels, setAvailableS2VModels] = useState<{ id: string; model: any }[]>([]);
   const [selectedS2VModel, setSelectedS2VModel] = useState<{ id: string; model: any } | null>(null);
   const [showModelSelection, setShowModelSelection] = useState(false);
+  const [isLoadingModels, setIsLoadingModels] = useState(true);
 
   const recordingInterval = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -173,11 +176,12 @@ const VideoCreation: React.FC = () => {
   }, [selectedS2VModel]);
 
   const steps: CreationStep[] = [
-    { id: 1, title: '影片標題', completed: !!title && (!showModelSelection || !!selectedS2VModel) },
-    { id: 2, title: '上傳圖片', completed: !!selectedImage && !!selectedImageRatio && !!selectedVideoQuality },
-    { id: 3, title: '選擇音頻', completed: !!selectedAudioRecord },
-    { id: 4, title: '影片情境描述', completed: !!videoDescription },
-    { id: 5, title: '生成影片', completed: false },
+    { id: 1, title: '選擇 AI 模型', completed: !isLoadingModels && (!showModelSelection || !!selectedS2VModel) },
+    { id: 2, title: '影片標題', completed: !!title },
+    { id: 3, title: '上傳圖片', completed: !!selectedImage && !!selectedImageRatio && !!selectedVideoQuality },
+    { id: 4, title: '選擇音頻', completed: !!selectedAudioRecord },
+    { id: 5, title: '影片情境描述', completed: !!videoDescription },
+    { id: 6, title: '生成影片', completed: false },
   ];
 
   const readingText = "森林是我們人類賴以生存的珍貴自然資源,對於維持生態平衡具有重要意義。";
@@ -185,12 +189,13 @@ const VideoCreation: React.FC = () => {
   // 載入 AI 模組配置
   const loadAIModuleConfig = async () => {
     try {
+      setIsLoadingModels(true);
       const result = await getAIModules('s2v');
       console.log('AI 模組配置 (S2V):', result);
-      
+
       if (result.success && result.data && result.data.modules.s2v) {
         setAiModuleConfig(result.data);
-        
+
         // 提取可用的 S2V 模型
         const models: { id: string; model: any }[] = [];
         result.data.modules.s2v.forEach(item => {
@@ -202,9 +207,9 @@ const VideoCreation: React.FC = () => {
             models.push({ id, model });
           });
         });
-        
+
         setAvailableS2VModels(models);
-        
+
         // 如果有多個模型，顯示選擇界面
         if (models.length > 1) {
           setShowModelSelection(true);
@@ -216,6 +221,8 @@ const VideoCreation: React.FC = () => {
       }
     } catch (error) {
       console.error('載入 AI 模組配置失敗:', error);
+    } finally {
+      setIsLoadingModels(false);
     }
   };
 
@@ -484,7 +491,7 @@ const VideoCreation: React.FC = () => {
   };
 
   const handleNextStep = async () => {
-    if (currentStep < 5) {
+    if (currentStep < 6) {
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
       // 追蹤步驟切換
@@ -581,28 +588,34 @@ const VideoCreation: React.FC = () => {
 
   const uploadVoiceModel = async () => {
     if (!audioBlob) {
-      setUploadMessage('❌ 沒有錄音檔案');
+      setUploadMessage('❌ 沒有音頻檔案');
       return;
     }
 
     if (!newVoiceName.trim()) {
-      setUploadMessage('❌ 請輸入語音模型名稱');
+      setUploadMessage('❌ 請輸入語音名稱');
       return;
     }
 
-    if (recordingTime > 10) {
-      setUploadMessage('❌ 錄音時間太長，請錄製最多10秒');
+    if (recordingTime < 5) {
+      setUploadMessage('❌ 音頻時長太短，請錄製至少5秒');
+      return;
+    }
+
+    if (recordingTime > 300) {
+      setUploadMessage('❌ 音頻時長太長，請錄製最多300秒');
       return;
     }
 
     setIsUploading(true);
-    setUploadMessage('🔄 正在上傳語音模型...');
+    setUploadMessage('🔄 正在上傳語音內容...');
 
     try {
       const formData = new FormData();
       formData.append('wav_file', audioBlob, `${newVoiceName}.webm`);
       formData.append('model_note', newVoiceName);
-      formData.append('model_text', readingText);
+      formData.append('model_text', newVoiceName);
+      formData.append('is_model_mode', 'false'); // 使用「內容」模式
 
       const proxyUrl = API_ENDPOINTS.UPLOAD_WAV;
       
@@ -624,16 +637,19 @@ const VideoCreation: React.FC = () => {
         const newModel: VoiceModel = {
           id: `custom-${result.data.voice_model_pk}`,
           name: newVoiceName,
-          description: `自訂語音模型 (${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, '0')})`,
+          description: `語音內容 (${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, '0')})`,
           isCustom: true,
           audioUrl: result.data.voice_model_url,
           pk: result.data.voice_model_pk,
         };
-        
+
         setCustomVoiceModels(prev => [...prev, newModel]);
         setSelectedVoiceModel(newModel.id);
-        setUploadMessage('✅ 聲音模型建立成功！');
-        
+        setUploadMessage('✅ 語音內容上傳成功！');
+
+        // 刷新音頻創作記錄列表
+        loadAudioRecords();
+
         setTimeout(() => {
           setShowVoiceRecording(false);
           resetVoiceRecording();
@@ -655,6 +671,63 @@ const VideoCreation: React.FC = () => {
     setAudioBlob(null);
     setUploadMessage('');
     setIsUploading(false);
+    setUploadedFileName('');
+    setUploadMode('record');
+  };
+
+  // 處理音頻檔案上傳
+  const handleAudioFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // 檢查檔案類型
+    if (!file.type.startsWith('audio/')) {
+      setUploadMessage('❌ 請選擇音頻檔案');
+      return;
+    }
+
+    // 檢查檔案大小（最大 20MB）
+    const maxSize = 20 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadMessage('❌ 檔案大小超過 20MB');
+      return;
+    }
+
+    setUploadedFileName(file.name);
+
+    // 創建 Audio 元素來獲取音頻時長
+    const audio = new Audio();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      audio.src = e.target?.result as string;
+    };
+
+    audio.onloadedmetadata = () => {
+      const duration = Math.floor(audio.duration);
+      setRecordingTime(duration);
+
+      // 檢查時長（5-300 秒）
+      if (duration < 5) {
+        setUploadMessage('❌ 音頻時長太短，請上傳至少5秒的音頻');
+        setAudioBlob(null);
+        setUploadedFileName('');
+        return;
+      }
+
+      if (duration > 300) {
+        setUploadMessage('❌ 音頻時長太長，請上傳最多300秒的音頻');
+        setAudioBlob(null);
+        setUploadedFileName('');
+        return;
+      }
+
+      // 轉換為 Blob
+      setAudioBlob(file);
+      setUploadMessage('');
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const formatTime = (seconds: number) => {
@@ -885,9 +958,83 @@ const VideoCreation: React.FC = () => {
       case 1:
         return (
           <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">選擇 AI 模型</h3>
+            <p className="text-gray-600 mb-6">選擇適合的 AI 模型來生成您的影片</p>
+
+            {/* 載入中提示 */}
+            {isLoadingModels ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 size={48} className="animate-spin text-blue-500" />
+                <p className="ml-4 text-gray-600">載入 AI 模型中...</p>
+              </div>
+            ) : (
+              /* AI 模型選擇 */
+              <div className="grid grid-cols-2 gap-4 md:gap-6">
+              {availableS2VModels.map(({ id, model }) => (
+                <div
+                  key={id}
+                  className={`bg-white rounded-2xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border-2 ${
+                    selectedS2VModel?.id === id
+                      ? `${AI_COLORS.border}`
+                      : 'border-transparent hover:border-gray-300'
+                  } group flex flex-col`}
+                  onClick={() => setSelectedS2VModel({ id, model })}
+                >
+                  <div className="text-center flex-1 flex flex-col">
+                    {/* 圖示 */}
+                    <div className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 group-hover:scale-110 transition-transform ${
+                      selectedS2VModel?.id === id ? AI_COLORS.bg : 'bg-blue-100'
+                    }`}>
+                      <Video size={32} className={`${selectedS2VModel?.id === id ? AI_COLORS.text : 'text-blue-600'} md:w-10 md:h-10`} />
+                    </div>
+
+                    {/* 模型名稱 */}
+                    <h3 className="text-lg md:text-2xl font-bold text-gray-900 mb-2 md:mb-3">{model.name}</h3>
+
+                    {/* 描述 */}
+                    <p className="text-xs md:text-base text-gray-600 mb-4 md:mb-6">
+                      {model.branch.length > 0 && model.branch[0].resolution
+                        ? `支援${[...new Set(model.branch.map((b: any) => b.resolution))].join('、')}品質`
+                        : '專業影片生成'}
+                    </p>
+
+                    {/* 功能列表 */}
+                    <div className="text-left space-y-2 md:space-y-3 mb-4 md:mb-6 flex-1">
+                      {model.branch.map((branch: any, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2 md:gap-3">
+                          <CheckCircle size={16} className={`flex-shrink-0 mt-0.5 md:w-5 md:h-5 ${
+                            selectedS2VModel?.id === id ? AI_COLORS.text : 'text-green-500'
+                          }`} />
+                          <div className="flex-1">
+                            <p className="text-xs md:text-sm font-medium text-gray-900">{branch.branch}</p>
+                            <p className="text-xs text-gray-600">{branch.token_per_unit} token/秒</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 選擇按鈕 */}
+                    <div className={`px-3 md:px-4 py-2 rounded-lg text-sm md:text-base font-semibold group-hover:shadow-md transition-shadow ${
+                      selectedS2VModel?.id === id
+                        ? `${AI_COLORS.bg} ${AI_COLORS.text}`
+                        : 'bg-blue-100 text-blue-600'
+                    }`}>
+                      {selectedS2VModel?.id === id ? '已選擇' : `選擇${model.name}`}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              </div>
+            )}
+          </div>
+        );
+
+      case 2:
+        return (
+          <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">設定影片標題</h3>
             <p className="text-gray-600 mb-6">為您的影片設定一個吸引人的標題</p>
-            
+
             <div className="space-y-6">
               {/* 影片標題 */}
               <div>
@@ -905,7 +1052,7 @@ const VideoCreation: React.FC = () => {
               {user?.role === 'admin' && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-3">
-                    優先級 * 
+                    優先級 *
                     <span className="text-xs text-gray-500 font-normal ml-2">（1 最快，9 最慢）</span>
                   </label>
                   <div className="grid grid-cols-9 gap-2">
@@ -930,56 +1077,18 @@ const VideoCreation: React.FC = () => {
                 </div>
               )}
 
-              {/* AI 模型選擇（如果有多個模型） */}
-              {showModelSelection && availableS2VModels.length > 1 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-3">選擇 AI 模型 *</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {availableS2VModels.map(({ id, model }) => (
-                      <div
-                        key={id}
-                        className={`p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                          selectedS2VModel?.id === id
-                            ? `${AI_COLORS.border} ${AI_COLORS.bgLight}`
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedS2VModel({ id, model })}
-                      >
-                        <div className="space-y-3">
-                          <h4 className="font-semibold text-gray-900">{model.name}</h4>
-                          <div className="space-y-2">
-                            {model.branch.map((branch: any, idx: number) => (
-                              <div key={idx} className="text-sm">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-gray-700">{branch.branch}</span>
-                                  <span className="text-blue-600 font-semibold">
-                                    {branch.token_per_unit} token/秒
-                                  </span>
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                  每 {branch.per_unit} 秒消耗 {branch.token_per_unit} token
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         );
 
-      case 2:
+      case 3:
         return (
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">上傳圖片</h3>
             <p className="text-gray-600 mb-6">選擇一張圖片作為影片的主要視覺內容</p>
-            
+
             {/* 影片品質選擇 */}
-            <div className="mb-6">
+            <div>
               <label className="block text-sm font-semibold text-gray-900 mb-3">選擇影片品質 *</label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {selectedS2VModel?.model.branch.map((branch: any) => (
@@ -1182,7 +1291,7 @@ const VideoCreation: React.FC = () => {
           </div>
         );
 
-      case 3:
+      case 4:
         return (
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">選擇音頻</h3>
@@ -1190,7 +1299,25 @@ const VideoCreation: React.FC = () => {
             
             {/* 音頻記錄列表 */}
             <div className="mb-8">
-              <h4 className="text-lg font-semibold text-gray-900 mb-4">我的音頻創作記錄</h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold text-gray-900">音頻記錄</h4>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowVoiceRecording(true)}
+                    className={`inline-flex items-center gap-2 px-4 py-2 ${AI_COLORS.button} rounded-lg font-medium text-sm transition-colors`}
+                  >
+                    <Upload size={16} />
+                    建立音頻
+                  </button>
+                  <button
+                    onClick={() => navigate('/provider/creator/audio')}
+                    className={`inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg font-medium text-sm transition-colors`}
+                  >
+                    <Plus size={16} />
+                    克隆音頻
+                  </button>
+                </div>
+              </div>
               {isLoadingAudioRecords ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 size={32} className="animate-spin text-gray-400" />
@@ -1216,21 +1343,10 @@ const VideoCreation: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* 建立新音頻按鈕 */}
-            <div className="text-center">
-              <button
-                onClick={() => navigate('/provider/creator/audio')}
-                className={`inline-flex items-center gap-2 px-6 py-3 ${AI_COLORS.button} rounded-xl font-semibold transition-colors`}
-              >
-                <Plus size={20} />
-                建立新音頻
-              </button>
-            </div>
           </div>
         );
 
-      case 4:
+      case 5:
         return (
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">影片情境描述</h3>
@@ -1278,7 +1394,7 @@ const VideoCreation: React.FC = () => {
           </div>
         );
 
-      case 5:
+      case 6:
         return (
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">生成影片</h3>
@@ -1880,7 +1996,7 @@ const VideoCreation: React.FC = () => {
           
           <div className="flex-1" />
           
-          {currentStep < 5 && !isGeneratingVideo && (
+          {currentStep < 6 && !isGeneratingVideo && (
             <button
               onClick={handleNextStep}
               disabled={!steps[currentStep - 1].completed}
@@ -2079,7 +2195,7 @@ const VideoCreation: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <button 
+              <button
                 onClick={() => {
                   setShowVoiceRecording(false);
                   resetVoiceRecording();
@@ -2089,8 +2205,8 @@ const VideoCreation: React.FC = () => {
               >
                 取消
               </button>
-              <h3 className="text-lg font-semibold text-gray-900">錄製語音模型</h3>
-              <button 
+              <h3 className="text-lg font-semibold text-gray-900">建立音頻</h3>
+              <button
                 onClick={uploadVoiceModel}
                 disabled={!newVoiceName.trim() || !audioBlob || isUploading}
                 className={`font-semibold ${
@@ -2105,60 +2221,150 @@ const VideoCreation: React.FC = () => {
 
             <div className="p-6 space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">語音模型名稱</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">語音名稱 *</label>
                 <input
                   type="text"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-ai-500 focus:border-transparent"
-                  placeholder="輸入語音模型名稱..."
+                  placeholder="請輸入語音名稱..."
                   value={newVoiceName}
                   onChange={(e) => setNewVoiceName(e.target.value)}
                   disabled={isUploading}
                 />
+                <p className="mt-2 text-xs text-gray-500">
+                  💡 請輸入一個有意義的名稱，方便日後識別
+                </p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">建議朗讀文本</label>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-gray-700 leading-relaxed">{readingText}</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-4">錄音控制</label>
-                <div className="text-center space-y-4">
-                  <div className="flex items-center justify-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : audioBlob ? 'bg-green-500' : 'bg-gray-300'}`} />
-                    <span className="text-2xl font-bold text-gray-900">{formatTime(recordingTime)}</span>
-                  </div>
-                  
-                  <div className="flex justify-center">
+                {/* 標題和切換按鈕 */}
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-semibold text-gray-900">錄音控制</label>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={isRecording ? stopRecording : startRecording}
-                      disabled={isUploading}
-                      className={`w-20 h-20 rounded-full flex items-center justify-center text-white transition-colors ${
-                        isRecording ? 'bg-red-500 hover:bg-red-600' : `${AI_COLORS.bgDark} hover:${AI_COLORS.bgHover}`
-                      } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onClick={() => {
+                        setUploadMode('record');
+                        setAudioBlob(null);
+                        setUploadedFileName('');
+                        setRecordingTime(0);
+                        setUploadMessage('');
+                      }}
+                      disabled={isUploading || isRecording}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        uploadMode === 'record'
+                          ? `${AI_COLORS.bgDark} text-white`
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      } ${(isUploading || isRecording) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {isRecording ? (
-                        <Square size={32} fill="currentColor" />
-                      ) : (
-                        <Mic size={32} />
-                      )}
+                      <div className="flex items-center gap-2">
+                        <Mic size={14} />
+                        錄音
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setUploadMode('upload');
+                        setAudioBlob(null);
+                        setUploadedFileName('');
+                        setRecordingTime(0);
+                        setUploadMessage('');
+                      }}
+                      disabled={isUploading || isRecording}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        uploadMode === 'upload'
+                          ? `${AI_COLORS.bgDark} text-white`
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      } ${(isUploading || isRecording) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Upload size={14} />
+                        上傳檔案
+                      </div>
                     </button>
                   </div>
-
-                  {audioBlob && (
-                    <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
-                      <CheckCircle size={16} />
-                      錄音完成 ({formatTime(recordingTime)})
-                    </div>
-                  )}
                 </div>
+
+                {/* 錄音模式 */}
+                {uploadMode === 'record' && (
+                  <div className="text-center space-y-4">
+                    <div className="flex items-center justify-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : audioBlob ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      <span className="text-2xl font-bold text-gray-900">{formatTime(recordingTime)}</span>
+                    </div>
+
+                    <div className="flex justify-center">
+                      <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        disabled={isUploading}
+                        className={`w-20 h-20 rounded-full flex items-center justify-center text-white transition-colors ${
+                          isRecording ? 'bg-red-500 hover:bg-red-600' : `${AI_COLORS.bgDark} hover:${AI_COLORS.bgHover}`
+                        } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {isRecording ? (
+                          <Square size={32} fill="currentColor" />
+                        ) : (
+                          <Mic size={32} />
+                        )}
+                      </button>
+                    </div>
+
+                    {audioBlob && (
+                      <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                        <CheckCircle size={16} />
+                        錄音完成 ({formatTime(recordingTime)})
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 上傳模式 */}
+                {uploadMode === 'upload' && (
+                  <div className="text-center space-y-4">
+                    <div className="flex justify-center">
+                      <input
+                        id="audio-upload"
+                        type="file"
+                        accept="audio/*"
+                        onChange={handleAudioFileUpload}
+                        disabled={isUploading}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="audio-upload"
+                        className={`w-20 h-20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer ${
+                          AI_COLORS.bgDark
+                        } hover:${AI_COLORS.bgHover} ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <Upload size={32} />
+                      </label>
+                    </div>
+
+                    {audioBlob && uploadedFileName && (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                          <CheckCircle size={16} />
+                          已上傳: {uploadedFileName}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setAudioBlob(null);
+                            setUploadedFileName('');
+                            setRecordingTime(0);
+                            setUploadMessage('');
+                          }}
+                          disabled={isUploading}
+                          className="text-xs text-red-600 hover:text-red-700 font-medium"
+                        >
+                          清除檔案
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {uploadMessage && (
                 <div className={`p-4 rounded-xl text-center font-medium ${
-                  uploadMessage.includes('成功') 
+                  uploadMessage.includes('成功')
                     ? 'bg-green-50 border border-green-200 text-green-700'
                     : uploadMessage.includes('錯誤') || uploadMessage.includes('失敗')
                     ? 'bg-red-50 border border-red-200 text-red-700'
@@ -2173,15 +2379,27 @@ const VideoCreation: React.FC = () => {
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Lightbulb size={20} className="text-amber-600" />
-                  <h4 className="font-semibold text-amber-800">錄音小貼士</h4>
+                  <h4 className="font-semibold text-amber-800">使用小貼士</h4>
                 </div>
-                <ul className="text-sm text-amber-700 space-y-1">
-                  <li>• 請在安靜的環境中錄音</li>
-                  <li>• 保持與麥克風適當距離</li>
-                  <li>• 語速適中，發音清晰</li>
-                  <li>• 建議錄音時長最多10秒</li>
-                  <li>• 請完整朗讀建議文本</li>
-                </ul>
+                <div className="text-sm text-amber-700">
+                  {uploadMode === 'record' ? (
+                    <ul className="space-y-1">
+                      <li>• 請在安靜的環境中錄音</li>
+                      <li>• 保持與麥克風適當距離</li>
+                      <li>• 語速適中，發音清晰</li>
+                      <li>• 建議錄音時長 5-300 秒</li>
+                      <li>• 建議使用明確語音內容</li>
+                    </ul>
+                  ) : (
+                    <ul className="space-y-1">
+                      <li>• 支援格式：WAV、MP3、WebM</li>
+                      <li>• 檔案大小：最大 20MB</li>
+                      <li>• 音頻時長：5-300 秒</li>
+                      <li>• 建議使用高品質音頻</li>
+                      <li>• 內容應符合建議朗讀文本</li>
+                    </ul>
+                  )}
+                </div>
               </div>
             </div>
           </div>

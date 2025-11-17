@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../contexts/AuthContext';
 import { getEventSkuList, createEventJoinUrl, ItemEventItem } from '../../config/api';
 import { AI_COLORS } from '../../constants/colors';
 
 const UserEvent: React.FC = () => {
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
+  const { user } = useAuth();
   
   // 狀態管理
   const [events, setEvents] = useState<ItemEventItem[]>([]);
@@ -67,6 +69,51 @@ const UserEvent: React.FC = () => {
     }
   };
 
+  // 計算活動即時狀態(根據開始/結束時間)
+  const getEventRealTimeStatus = (event: ItemEventItem): {
+    status: string;
+    displayText: string;
+    canRegister: boolean;
+  } => {
+    const now = new Date();
+    const startTime = new Date(event.start_time);
+    const endTime = new Date(event.end_time);
+
+    // 活動已結束
+    if (now > endTime) {
+      return {
+        status: 'ended',
+        displayText: '活動結束',
+        canRegister: false
+      };
+    }
+
+    // 活動進行中(已開始但未結束)
+    if (now >= startTime && now <= endTime) {
+      return {
+        status: 'in_progress',
+        displayText: '活動進行中',
+        canRegister: false
+      };
+    }
+
+    // 活動尚未開始 - 根據後端狀態判斷
+    if (event.event_status === 'registration_open') {
+      return {
+        status: 'registration_open',
+        displayText: '報名開放',
+        canRegister: true
+      };
+    }
+
+    // 其他狀態(報名截止、草稿等)
+    return {
+      status: event.event_status,
+      displayText: event.event_status_display,
+      canRegister: false
+    };
+  };
+
   // 複製報名連結
   const handleCopyJoinLink = async (event: ItemEventItem) => {
     try {
@@ -75,7 +122,8 @@ const UserEvent: React.FC = () => {
         return;
       }
 
-      const joinUrl = createEventJoinUrl(event.sku);
+      // 如果使用者已登入，則在連結中加入 referrer 參數（使用 member_card）
+      const joinUrl = createEventJoinUrl(event.sku, user?.member_card);
       
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(joinUrl);
@@ -110,9 +158,9 @@ const UserEvent: React.FC = () => {
       showError('無法報名', '此活動尚未設定 SKU，無法進行報名');
       return;
     }
-    
-    const joinUrl = createEventJoinUrl(event.sku);
-    navigate(joinUrl);
+
+    // 使用相對路徑進行導航,不使用完整 URL
+    navigate(`/client/event/join/${event.sku}`);
   };
 
   // 獲取所有可用的標籤類別
@@ -207,15 +255,21 @@ const UserEvent: React.FC = () => {
                     />
                     {/* 活動狀態標籤 */}
                     <div className="absolute top-3 right-3">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        event.event_status === 'registration_open' ? 'bg-green-100 text-green-700' :
-                        event.event_status === 'registration_closed' ? 'bg-yellow-100 text-yellow-700' :
-                        event.event_status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                        event.event_status === 'completed' ? `${AI_COLORS.bgLight} ${AI_COLORS.textDark}` :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {event.event_status_display}
-                      </span>
+                      {(() => {
+                        const realTimeStatus = getEventRealTimeStatus(event);
+                        return (
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            realTimeStatus.status === 'registration_open' ? 'bg-green-100 text-green-700' :
+                            realTimeStatus.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            realTimeStatus.status === 'ended' ? 'bg-gray-100 text-gray-700' :
+                            realTimeStatus.status === 'registration_closed' ? 'bg-yellow-100 text-yellow-700' :
+                            realTimeStatus.status === 'completed' ? `${AI_COLORS.bgLight} ${AI_COLORS.textDark}` :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {realTimeStatus.displayText}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -262,21 +316,31 @@ const UserEvent: React.FC = () => {
                   
                   {/* 操作按鈕 - 固定在底部 */}
                   <div className="flex gap-2 mt-auto">
-                    <button
-                      onClick={() => handleJoinEvent(event)}
-                      disabled={event.event_status !== 'registration_open'}
-                      className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm`}
-                    >
-                      {event.event_status === 'registration_open' ? '立即報名' : '報名截止'}
-                    </button>
-                    
-                    <button
-                      onClick={() => handleCopyJoinLink(event)}
-                      className="px-3 py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                      title="複製報名連結"
-                    >
-                      <i className="ri-link" style={{ fontSize: '16px' }}></i>
-                    </button>
+                    {(() => {
+                      const realTimeStatus = getEventRealTimeStatus(event);
+                      return (
+                        <>
+                          <button
+                            onClick={() => handleJoinEvent(event)}
+                            disabled={!realTimeStatus.canRegister}
+                            className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm`}
+                          >
+                            {realTimeStatus.canRegister ? '立即報名' :
+                             realTimeStatus.status === 'ended' ? '活動結束' :
+                             realTimeStatus.status === 'in_progress' ? '進行中' :
+                             '報名截止'}
+                          </button>
+
+                          <button
+                            onClick={() => handleCopyJoinLink(event)}
+                            className="px-3 py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="複製報名連結"
+                          >
+                            <i className="ri-link" style={{ fontSize: '16px' }}></i>
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
