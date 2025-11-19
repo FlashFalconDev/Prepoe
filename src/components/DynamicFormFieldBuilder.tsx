@@ -21,8 +21,7 @@ const FIELD_TYPES: Array<{ value: FormFieldType; label: string; icon: string }> 
   { value: 'number', label: '數字', icon: 'ri-hashtag' },
   { value: 'select', label: '下拉選單', icon: 'ri-arrow-down-s-line' },
   { value: 'radio', label: '單選', icon: 'ri-radio-button-line' },
-  { value: 'checkbox', label: '多選', icon: 'ri-checkbox-multiple-line' },
-  { value: 'boolean', label: '同意條款', icon: 'ri-checkbox-circle-line' }
+  { value: 'checkbox', label: '多選', icon: 'ri-checkbox-multiple-line' }
 ];
 
 // 預設的基本欄位
@@ -102,12 +101,20 @@ const DynamicFormFieldBuilder: React.FC<DynamicFormFieldBuilderProps> = ({ field
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
 
-    const items = Array.from(fields);
+    // 只處理非預設欄位的拖曳
+    const nonDefaultFields = fields.filter(field => !isDefaultField(field.id));
+    const defaultFields = fields.filter(field => isDefaultField(field.id));
+
+    // 在非預設欄位中重新排序
+    const items = Array.from(nonDefaultFields);
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
+    // 合併預設欄位和重新排序後的欄位
+    const allFields = [...defaultFields, ...items];
+
     // 更新 order
-    const updatedItems = items.map((item, index) => ({ ...item, order: index }));
+    const updatedItems = allFields.map((item, index) => ({ ...item, order: index }));
     onChange(updatedItems);
   };
 
@@ -308,11 +315,13 @@ const DynamicFormFieldBuilder: React.FC<DynamicFormFieldBuilderProps> = ({ field
         </div>
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="form-fields">
+          <Droppable droppableId="form-fields-list">
             {(provided) => (
               <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3">
-                {fields.filter(field => !isDefaultField(field.id)).map((field, index) => (
-                  <Draggable key={String(field.id)} draggableId={String(field.id)} index={index}>
+                {fields.filter(field => !isDefaultField(field.id)).map((field, index) => {
+                  const fieldKey = `field-${String(field.id)}`;
+                  return (
+                  <Draggable key={fieldKey} draggableId={fieldKey} index={index}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -621,7 +630,8 @@ const DynamicFormFieldBuilder: React.FC<DynamicFormFieldBuilderProps> = ({ field
                       </div>
                     )}
                   </Draggable>
-                ))}
+                  );
+                })}
                 {provided.placeholder}
               </div>
             )}

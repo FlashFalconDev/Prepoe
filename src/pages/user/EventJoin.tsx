@@ -95,6 +95,7 @@ const EventJoin: React.FC = () => {
   
   // 條款和備註
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [showRemarkSection, setShowRemarkSection] = useState(false);
   const [remarkNote, setRemarkNote] = useState('');
 
@@ -396,7 +397,8 @@ const EventJoin: React.FC = () => {
     }
     
     // 檢查條款同意
-    if (!agreeTerms) {
+    // 只有在有活動條款時才需要檢查
+    if (eventInfo?.terms_of_event && !agreeTerms) {
       showError('請同意活動條款');
       return;
     }
@@ -885,25 +887,38 @@ const EventJoin: React.FC = () => {
                       </div>
                     )}
 
-                    {/* 同意條款（必填） */}
-                    <div className="space-y-3 pt-4 border-t">
-                      <div className={`flex items-start gap-3 p-3 rounded-lg ${
-                        !agreeTerms ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          id="agree_terms"
-                          checked={agreeTerms}
-                          onChange={(e) => setAgreeTerms(e.target.checked)}
-                          className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 rounded"
-                          required
-                        />
-                        <label htmlFor="agree_terms" className="flex-1 text-sm text-gray-700 cursor-pointer">
-                          我同意 <a href="#" className="text-purple-600 hover:text-purple-700 underline">活動條款</a> 和相關規定
-                          <span className="text-red-500 ml-1">*</span>
-                        </label>
+                    {/* 同意條款（必填 - 只在有條款時顯示） */}
+                    {eventInfo?.terms_of_event && (
+                      <div className="space-y-3 pt-4 border-t">
+                        <div className={`flex items-start gap-3 p-3 rounded-lg ${
+                          !agreeTerms ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            id="agree_terms"
+                            checked={agreeTerms}
+                            onChange={(e) => setAgreeTerms(e.target.checked)}
+                            className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 rounded"
+                            required
+                          />
+                          <label htmlFor="agree_terms" className="flex-1 text-sm text-gray-700 cursor-pointer">
+                            我同意{' '}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setShowTermsModal(true);
+                              }}
+                              className="text-purple-600 hover:text-purple-700 underline"
+                            >
+                              活動條款
+                            </button>
+                            {' '}和相關規定
+                            <span className="text-red-500 ml-1">*</span>
+                          </label>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* 備註區塊（可展開） */}
                     <div className="pt-4 border-t">
@@ -1004,6 +1019,57 @@ const EventJoin: React.FC = () => {
               className="max-w-full max-h-[90vh] object-contain rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 活動條款彈窗 */}
+      {showTermsModal && eventInfo?.terms_of_event && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowTermsModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 標題列 */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-xl font-bold text-gray-900">活動條款</h3>
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+              >
+                <i className="ri-close-line text-2xl"></i>
+              </button>
+            </div>
+
+            {/* 內容區域 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div
+                className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: eventInfo.terms_of_event }}
+              />
+            </div>
+
+            {/* 按鈕區域 */}
+            <div className="flex gap-3 p-6 border-t bg-gray-50">
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  setAgreeTerms(true);
+                  setShowTermsModal(false);
+                }}
+                className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-lg transition-colors`}
+              >
+                同意條款
+              </button>
+            </div>
           </div>
         </div>
       )}

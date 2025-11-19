@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { handleAuthCallback, isCallbackPage } from '../services/thirdPartyAuth';
+import { getProtectedData } from '../config/api';
 import { AI_COLORS } from '../constants/colors';
 import { normalizePath, getBasename } from '../utils/pathUtils';
 
 const AuthCallback: React.FC = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
-  const [debugInfo, setDebugInfo] = useState<string>('');
   const navigate = useNavigate();
   const { login } = useAuth();
   const calledRef = useRef(false); // 防止重複呼叫
@@ -34,13 +34,10 @@ const AuthCallback: React.FC = () => {
           if (result.user) {
             login(result.user);
           }
-          
-          // 從後端 API 回應取得 next 路徑，如果沒有則跳轉到首頁
-          const redirectPath = result.next || '/';
-          console.log('📍 AuthCallback - 從後端 API 取得 next 路徑:', redirectPath);
 
-          // 顯示調試資訊
-          setDebugInfo(`將跳轉到: ${redirectPath}`);
+          // 登入成功後，調用 /api/protected/ 來獲取 session 中的 next 路徑
+          const protectedResponse = await getProtectedData();
+          const redirectPath = protectedResponse.data.session_info?.session_data?.next || '/';
 
           // 清除 URL 上的 code/state，避免刷新重複觸發
           const basename = getBasename();
@@ -48,7 +45,6 @@ const AuthCallback: React.FC = () => {
 
           // 標準化重定向路徑
           const normalizedPath = normalizePath(redirectPath);
-          console.log('🚀 AuthCallback - 即將跳轉到:', normalizedPath);
 
           setTimeout(() => {
             navigate(normalizedPath, { replace: true });
@@ -109,12 +105,6 @@ const AuthCallback: React.FC = () => {
         <p className="text-gray-600 mb-6">
           {message}
         </p>
-        {/* 調試資訊 */}
-        {debugInfo && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800 font-mono break-all">{debugInfo}</p>
-          </div>
-        )}
         {status === 'error' && (
           <button
             onClick={() => navigate('/login')}

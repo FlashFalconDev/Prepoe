@@ -92,7 +92,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const urlParams = new URLSearchParams(window.location.search);
       const referrer = urlParams.get('referrer');
 
-      const response = await getProtectedData(referrer || undefined);
+      // 構建完整的當前路徑（包含 pathname 和 search）
+      const currentPath = window.location.pathname + window.location.search;
+
+      const response = await getProtectedData(referrer || undefined, currentPath);
       if (response.status === 200) {
         // 如果API返回用戶資訊，使用API的資料
         if (response.data.user) {

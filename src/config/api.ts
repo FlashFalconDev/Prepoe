@@ -549,9 +549,15 @@ export const refreshCSRFToken = async () => {
 export const login = (username: string, password: string) =>
   api.post(API_ENDPOINTS.LOGIN, { username, password });
 export const logout = () => api.post(API_ENDPOINTS.LOGOUT);
-export const getProtectedData = (referrer?: string | number) => {
-  // 如果提供 referrer，則加入查詢參數
-  const params = referrer ? { referrer: String(referrer) } : {};
+export const getProtectedData = (referrer?: string | number, next?: string) => {
+  // 構建查詢參數物件
+  const params: { referrer?: string; next?: string } = {};
+  if (referrer) {
+    params.referrer = String(referrer);
+  }
+  if (next) {
+    params.next = next;
+  }
   return api.get(API_ENDPOINTS.PROTECTED, { params });
 };
 export const getFeatureFlag = () => api.get(API_ENDPOINTS.FEATURE_FLAG);
