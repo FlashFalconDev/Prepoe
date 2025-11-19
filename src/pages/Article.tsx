@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { FileText, Image, Video, Tag, Eye, Edit3, Plus, Save, Send, ArrowLeft, X, Crop, Check, RotateCcw, Loader2, Play, Music } from 'lucide-react';
+import { FileText, Image, Video, Tag, Edit3, Plus, Save, Send, ArrowLeft, X, Crop, Check, RotateCcw, Loader2, Play, Music } from 'lucide-react';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '../hooks/useToast';
@@ -7,17 +7,16 @@ import { useConfirm } from '../hooks/useConfirm';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { AI_COLORS } from '../constants/colors';
 import FeatureGate from '../components/FeatureGate';
-import { 
-  getArticles, 
-  createArticle, 
-  updateArticle, 
-  deleteArticle, 
-  getTags, 
-  uploadMedia,
+import {
+  getArticles,
+  createArticle,
+  updateArticle,
+  deleteArticle,
+  getTags,
+  uploadFile,
   refreshCSRFToken,
   type Article,
   type ArticleData,
-  type ArticleFiles,
   type Tag as ApiTag,
   type Article as ApiArticle
 } from '../config/api';
@@ -333,7 +332,6 @@ const ContentCreator: React.FC = () => {
   const [videos, setVideos] = useState<string[]>([]);
   const [audioFiles, setAudioFiles] = useState<string[]>([]);
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
-  const [preview, setPreview] = useState(false);
   const [articles, setArticles] = useState<Article[]>([]);
   const [availableTags, setAvailableTags] = useState<ApiTag[]>([]);
   const [loading, setLoading] = useState(false);
@@ -590,12 +588,14 @@ const ContentCreator: React.FC = () => {
     setTags(article.tags);
     setStatus(article.status);
     setCoverImage(article.cover_image_url || '');
-    
-    // 載入現有的附加圖片和影片
+
+    // 載入現有的附加圖片、影片和音頻
     const existingImages = article.images ? article.images.map(img => img.url) : [];
     const existingVideos = article.videos ? article.videos.map(vid => vid.url) : [];
+    const existingAudios = article.audios ? article.audios.map(aud => aud.url) : [];
     setImages(existingImages);
     setVideos(existingVideos);
+    setAudioFiles(existingAudios);
     
     // 載入閱讀條件設定
     if (article.reading_conditions && Array.isArray(article.reading_conditions)) {
@@ -683,10 +683,10 @@ const ContentCreator: React.FC = () => {
       const response = await updateArticle(article.id, {
         title: article.title,
         content: article.content,
-        status: 'published', // 改为发布状态
+        status: 'published', // 改為發布狀態
         tags: article.tags
-      }, {});
-      
+      });
+
       if (response.success) {
         showSuccess('發布成功', '文章已成功發布！');
         loadArticles(); // 重新載入文章列表
@@ -708,13 +708,11 @@ const ContentCreator: React.FC = () => {
 
     try {
       setSaving(true);
-      
+
       // 在保存前先刷新CSRF token
-      // 注意：這是為了確保長時間編輯後 token 仍然有效
-      // 如果遇到 CSRF 錯誤，axios 攔截器會自動重試，這裡只是預防性刷新
       console.log('保存前刷新CSRF token...');
       await refreshCSRFToken();
-      
+
       const articleData: ArticleData = {
         title: title.trim(),
         content: content.trim(),
@@ -722,75 +720,107 @@ const ContentCreator: React.FC = () => {
         tags
       };
 
-      const files: ArticleFiles = {};
-      
-      // 處理封面圖片 - 使用統一模組
+      // 處理封面圖片 - 使用 uploadFile 獲取 pk
       if (coverImage && coverImage.startsWith('data:')) {
         const result = await base64ToFile(coverImage, 'cover.jpg', 'image/jpeg');
         if (result.success && result.file) {
           // 可選：壓縮圖片
           const compressedResult = await compressImage(result.file, 0.8);
-          if (compressedResult.success && compressedResult.file) {
-            files.coverImage = compressedResult.file;
-          } else {
-            files.coverImage = result.file; // 使用原始檔案
+          const fileToUpload = (compressedResult.success && compressedResult.file)
+            ? compressedResult.file
+            : result.file;
+
+          // 上傳檔案獲取 pk
+          const uploadResponse = await uploadFile(fileToUpload);
+          if (uploadResponse.success) {
+            articleData.cover_image_pk = uploadResponse.data.Static_Usage_Record_pk;
           }
         }
       }
 
-      // 追蹤現有文件ID（用於更新時保留指定文件）
-      const existingImageIds: number[] = [];
-      const existingVideoIds: number[] = [];
-
       // 處理附加圖片
-      const imageFiles: File[] = [];
+      const imagePks: number[] = [];
       for (const imageUrl of images) {
         if (imageUrl.startsWith('data:')) {
           // 新上傳的 base64 圖片
           const response = await fetch(imageUrl);
           const blob = await response.blob();
-          imageFiles.push(new File([blob], `image_${imageFiles.length}.jpg`, { type: 'image/jpeg' }));
+          const timestamp = Date.now();
+          const file = new File([blob], `image_${timestamp}_${Math.random().toString(36).substr(2, 9)}.jpg`, { type: 'image/jpeg' });
+
+          // 上傳檔案獲取 pk
+          const uploadResponse = await uploadFile(file);
+          if (uploadResponse.success) {
+            imagePks.push(uploadResponse.data.Static_Usage_Record_pk);
+          }
         } else if (imageUrl.startsWith('http')) {
-          // 現有的圖片 URL，只追蹤ID，不重新上傳
+          // 現有的圖片 URL，從 editingArticle 中提取 pk
           if (isEditing && editingArticle && editingArticle.images) {
             const existingImage = editingArticle.images.find(img => img.url === imageUrl);
-            if (existingImage) {
-              existingImageIds.push(existingImage.id);
+            if (existingImage && existingImage.static_usage_record_pk) {
+              imagePks.push(existingImage.static_usage_record_pk);
             }
           }
         }
       }
-      if (imageFiles.length > 0) {
-        files.images = imageFiles;
-      }
-      if (existingImageIds.length > 0) {
-        files.existingImageIds = existingImageIds;
-      }
+      // 總是傳遞 image_pks（即使是空陣列），讓後端知道要清空
+      articleData.image_pks = imagePks;
 
       // 處理附加影片
-      const videoFiles: File[] = [];
+      const videoPks: number[] = [];
       for (const videoUrl of videos) {
         if (videoUrl.startsWith('data:')) {
           // 新上傳的 base64 影片
           const response = await fetch(videoUrl);
           const blob = await response.blob();
-          videoFiles.push(new File([blob], `video_${videoFiles.length}.mp4`, { type: 'video/mp4' }));
+          const timestamp = Date.now();
+          const file = new File([blob], `video_${timestamp}_${Math.random().toString(36).substr(2, 9)}.mp4`, { type: 'video/mp4' });
+
+          // 上傳檔案獲取 pk
+          const uploadResponse = await uploadFile(file);
+          if (uploadResponse.success) {
+            videoPks.push(uploadResponse.data.Static_Usage_Record_pk);
+          }
         } else if (videoUrl.startsWith('http')) {
-          // 現有的影片 URL，只追蹤ID，不重新上傳
+          // 現有的影片 URL，從 editingArticle 中提取 pk
           if (isEditing && editingArticle && editingArticle.videos) {
             const existingVideo = editingArticle.videos.find(vid => vid.url === videoUrl);
-            if (existingVideo) {
-              existingVideoIds.push(existingVideo.id);
+            if (existingVideo && existingVideo.static_usage_record_pk) {
+              videoPks.push(existingVideo.static_usage_record_pk);
             }
           }
         }
       }
-      if (videoFiles.length > 0) {
-        files.videos = videoFiles;
+      // 總是傳遞 video_pks（即使是空陣列），讓後端知道要清空
+      articleData.video_pks = videoPks;
+
+      // 處理附加音訊
+      const audioPks: number[] = [];
+      for (const audioUrl of audioFiles) {
+        if (audioUrl.startsWith('data:')) {
+          // 新上傳的 base64 音訊
+          const response = await fetch(audioUrl);
+          const blob = await response.blob();
+          const timestamp = Date.now();
+          const file = new File([blob], `audio_${timestamp}_${Math.random().toString(36).substr(2, 9)}.mp3`, { type: 'audio/mpeg' });
+
+          // 上傳檔案獲取 pk
+          const uploadResponse = await uploadFile(file);
+          if (uploadResponse.success) {
+            audioPks.push(uploadResponse.data.Static_Usage_Record_pk);
+          }
+        } else if (audioUrl.startsWith('http') || audioUrl.startsWith('blob:')) {
+          // 現有的音訊 URL，從 editingArticle 中提取 pk
+          if (isEditing && editingArticle && editingArticle.audios) {
+            const existingAudio = editingArticle.audios.find(aud => aud.url === audioUrl);
+            if (existingAudio && existingAudio.static_usage_record_pk) {
+              audioPks.push(existingAudio.static_usage_record_pk);
+            }
+          }
+        }
       }
-      if (existingVideoIds.length > 0) {
-        files.existingVideoIds = existingVideoIds;
-      }
+      // 總是傳遞 audio_pks（即使是空陣列），讓後端知道要清空
+      articleData.audio_pks = audioPks;
 
       // 處理閱讀條件設定
       if (readingConditionEnabled) {
@@ -845,27 +875,23 @@ const ContentCreator: React.FC = () => {
 
       console.log('準備發送文章數據:', {
         articleData,
-        files: {
-          hasCoverImage: !!files.coverImage,
-          imagesCount: files.images?.length || 0,
-          videosCount: files.videos?.length || 0,
-          existingImageIds: files.existingImageIds || [],
-          existingVideoIds: files.existingVideoIds || []
+        pks: {
+          cover_image_pk: articleData.cover_image_pk,
+          image_pks: articleData.image_pks,
+          video_pks: articleData.video_pks,
+          audio_pks: articleData.audio_pks
         }
       });
 
-      // 保存文章的函數
-      const saveArticle = async () => {
-        if (isEditing && editingArticle) {
-          // 更新現有文章
-          return await updateArticle(editingArticle.id, articleData, files);
-        } else {
-          // 創建新文章
-          return await createArticle(articleData, files);
-        }
-      };
-
-      let response = await saveArticle();
+      // 保存文章
+      let response;
+      if (isEditing && editingArticle) {
+        // 更新現有文章
+        response = await updateArticle(editingArticle.id, articleData);
+      } else {
+        // 創建新文章
+        response = await createArticle(articleData);
+      }
       console.log('文章API響應:', response);
       
       if (response.success) {
@@ -946,7 +972,33 @@ const ContentCreator: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-6">
 
-        {/* Editor Section */}
+        {/* 新增文章按鈕 - 只在沒有編輯時顯示 */}
+        {!isEditing && (
+          <div className="mb-6">
+            <button
+              onClick={() => {
+                setIsEditing(true);
+                setEditingArticle(null);
+                // 重置所有欄位
+                setTitle('');
+                setContent('');
+                setTags([]);
+                setStatus('draft');
+                setCoverImage('');
+                setImages([]);
+                setVideos([]);
+                setAudioFiles([]);
+              }}
+              className={`flex items-center gap-2 px-6 py-3 ${AI_COLORS.button} rounded-xl text-base font-medium shadow-sm`}
+            >
+              <Plus size={20} />
+              新增文章
+            </button>
+          </div>
+        )}
+
+        {/* Editor Section - 只在編輯時顯示 */}
+        {isEditing && (
         <div className="bg-white rounded-2xl shadow-sm mb-8">
           <div className="p-4 border-b border-gray-100">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -959,47 +1011,20 @@ const ContentCreator: React.FC = () => {
                 )}
               </div>
               <div className="flex flex-wrap gap-1 justify-end">
-                {isEditing && (
-                  <button
-                    onClick={handleCancelEdit}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                  >
-                    <X size={16} />
-                    <span className="hidden sm:inline">取消編輯</span>
-                    <span className="sm:hidden">取消</span>
-                  </button>
-                )}
                 <button
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    preview 
-                      ? 'bg-gray-100 text-gray-700' 
-                      : `${AI_COLORS.button}`
-                  }`}
-                  onClick={() => setPreview(false)}
+                  onClick={handleCancelEdit}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
                 >
-                  <Edit3 size={16} />
-                  <span className="hidden sm:inline">編輯</span>
-                  <span className="sm:hidden">編輯</span>
-                </button>
-                <button
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    preview 
-                      ? `${AI_COLORS.button}` 
-                      : 'bg-gray-100 text-gray-700'
-                  }`}
-                  onClick={() => setPreview(true)}
-                >
-                  <Eye size={16} />
-                  <span className="hidden sm:inline">預覽</span>
-                  <span className="sm:hidden">預覽</span>
+                  <X size={16} />
+                  <span className="hidden sm:inline">取消編輯</span>
+                  <span className="sm:hidden">取消</span>
                 </button>
               </div>
             </div>
           </div>
 
           <div className="p-6">
-            {!preview ? (
-              <div className="space-y-6">
+            <div className="space-y-6">
                 {/* Title Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">文章標題</label>
@@ -1268,365 +1293,6 @@ const ContentCreator: React.FC = () => {
                   )}
                 </div>
 
-                {/* 閱讀條件設定 */}
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
-                  <div className="flex items-center mb-4">
-                    <input
-                      type="checkbox"
-                      id="reading-condition"
-                      checked={readingConditionEnabled}
-                      onChange={e => setReadingConditionEnabled(e.target.checked)}
-                      className="accent-primary-600 w-5 h-5"
-                    />
-                    <label htmlFor="reading-condition" className="ml-3 text-base font-semibold text-gray-800">
-                      啟用閱讀條件設定
-                    </label>
-                  </div>
-                  {readingConditionEnabled && (
-                    <div className="space-y-6">
-                      {/* 一般用戶設定 */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-3">一般用戶</label>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="radio"
-                              name="general-readable"
-                              value="not-readable"
-                              checked={!generalReadable}
-                              onChange={() => setGeneralReadable(false)}
-                              className="accent-primary-600"
-                            />
-                            <span className="text-gray-700">不可閱讀</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                                                         <input
-                               type="radio"
-                               name="general-readable"
-                               value="readable"
-                               checked={generalReadable}
-                               onChange={() => {
-                                 setGeneralReadable(true);
-                                 // 當一般用戶設定為可閱讀時，VIP用戶自動設定為可閱讀
-                                 setVipReadable(true);
-                               }}
-                               className="accent-primary-600"
-                             />
-                            <span className="text-gray-700">可以閱讀</span>
-                            {generalReadable && (
-                              <>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  placeholder="0"
-                                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                  value={generalFee}
-                                  onChange={e => {
-                                    const value = Number(e.target.value);
-                                    setGeneralFee(value);
-                                    // VIP金額不能超過一般金額
-                                    if (vipFee > value) {
-                                      setVipFee(value);
-                                    }
-                                  }}
-                                />
-                                <span className="text-gray-500">元</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* VIP用戶設定 */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-3">VIP用戶</label>
-                        {generalReadable ? (
-                          /* 當一般用戶可以閱讀時，VIP用戶只能設定為可以閱讀 */
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                name="vip-readable"
-                                value="readable"
-                                checked={true}
-                                disabled
-                                className="accent-primary-600"
-                              />
-                              <span className="text-gray-700">可以閱讀</span>
-                              <input
-                                type="number"
-                                min={0}
-                                max={generalFee}
-                                placeholder="0"
-                                className="w-24 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                value={vipFee}
-                                onChange={e => setVipFee(Number(e.target.value))}
-                              />
-                              <span className="text-gray-500">元</span>
-                              <span className="text-xs text-gray-500">
-                                (上限: {generalFee}元)
-                              </span>
-                            </div>
-                            <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded-lg">
-                              💡 一般用戶已設定為可閱讀，VIP用戶自動享有閱讀權限
-                            </div>
-                          </div>
-                        ) : (
-                          /* 當一般用戶不可閱讀時，VIP用戶可以自由選擇 */
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                name="vip-readable"
-                                value="not-readable"
-                                checked={!vipReadable}
-                                onChange={() => setVipReadable(false)}
-                                className="accent-primary-600"
-                              />
-                              <span className="text-gray-700">不可閱讀</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                name="vip-readable"
-                                value="readable"
-                                checked={vipReadable}
-                                onChange={() => setVipReadable(true)}
-                                className="accent-primary-600"
-                              />
-                              <span className="text-gray-700">可以閱讀</span>
-                              {vipReadable && (
-                                <>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    placeholder="0"
-                                    className="w-24 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                    value={vipFee}
-                                    onChange={e => setVipFee(Number(e.target.value))}
-                                  />
-                                  <span className="text-gray-500">元</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* 日期區間條件 */}
-                      <div className="border-t border-gray-200 pt-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <label className="block text-sm font-medium text-gray-700">日期區間條件</label>
-                          <button
-                            type="button"
-                            onClick={addDateCondition}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm transition-colors ${AI_COLORS.button}`}
-                          >
-                            <Plus size={14} />
-                            新增日期區間
-                          </button>
-                        </div>
-                        
-                                                {dateConditions.length === 0 ? (
-                          <div className="text-center py-4 text-gray-500 text-sm">
-                            尚未設定日期區間條件
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            {dateConditions.map((condition, index) => (
-                              <div key={condition.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                  <h4 className="text-sm font-medium text-gray-700">條件 {index + 1}</h4>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeDateCondition(condition.id)}
-                                    className="text-red-500 hover:text-red-700 transition-colors"
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                                
-                                {/* 日期和時間設定 */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">開始日期</label>
-                                    <input
-                                      type="date"
-                                      value={condition.startDate}
-                                      onChange={e => updateDateCondition(condition.id, 'startDate', e.target.value)}
-                                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">結束日期</label>
-                                    <input
-                                      type="date"
-                                      value={condition.endDate}
-                                      onChange={e => updateDateCondition(condition.id, 'endDate', e.target.value)}
-                                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">開始時間</label>
-                                    <input
-                                      type="time"
-                                      value={condition.startTime}
-                                      onChange={e => updateDateCondition(condition.id, 'startTime', e.target.value)}
-                                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">結束時間</label>
-                                    <input
-                                      type="time"
-                                      value={condition.endTime}
-                                      onChange={e => updateDateCondition(condition.id, 'endTime', e.target.value)}
-                                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                    />
-                                  </div>
-                                </div>
-                                
-                                {/* 時間區間驗證提示 */}
-                                {(() => {
-                                  const overlapCheck = checkDateOverlap(condition.id, condition.startDate, condition.endDate, condition.startTime, condition.endTime);
-                                  return !overlapCheck.isValid ? (
-                                    <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg">
-                                      <p className="text-xs text-red-600">{overlapCheck.message}</p>
-                                    </div>
-                                  ) : null;
-                                })()}
-                                
-                                {/* 一般用戶設定 */}
-                                <div className="mb-3">
-                                  <label className="block text-xs font-medium text-gray-600 mb-2">一般用戶</label>
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-3">
-                                      <input
-                                        type="radio"
-                                        name={`general-readable-${condition.id}`}
-                                        value="not-readable"
-                                        checked={!condition.generalReadable}
-                                        onChange={() => updateDateCondition(condition.id, 'generalReadable', false)}
-                                        className="accent-primary-600"
-                                      />
-                                      <span className="text-sm text-gray-700">不可閱讀</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <input
-                                        type="radio"
-                                        name={`general-readable-${condition.id}`}
-                                        value="readable"
-                                        checked={condition.generalReadable}
-                                        onChange={() => {
-                                          updateDateCondition(condition.id, 'generalReadable', true);
-                                          updateDateCondition(condition.id, 'vipReadable', true);
-                                        }}
-                                        className="accent-primary-600"
-                                      />
-                                      <span className="text-sm text-gray-700">可以閱讀</span>
-                                      {condition.generalReadable && (
-                                        <>
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            placeholder="0"
-                                            className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                            value={condition.generalFee}
-                                            onChange={e => {
-                                              const value = Number(e.target.value);
-                                              updateDateCondition(condition.id, 'generalFee', value);
-                                              if (condition.vipFee > value) {
-                                                updateDateCondition(condition.id, 'vipFee', value);
-                                              }
-                                            }}
-                                          />
-                                          <span className="text-xs text-gray-500">元</span>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* VIP用戶設定 */}
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-2">VIP用戶</label>
-                                  {condition.generalReadable ? (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-3">
-                                        <input
-                                          type="radio"
-                                          name={`vip-readable-${condition.id}`}
-                                          value="readable"
-                                          checked={true}
-                                          disabled
-                                          className="accent-primary-600"
-                                        />
-                                        <span className="text-sm text-gray-700">可以閱讀</span>
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          max={condition.generalFee}
-                                          placeholder="0"
-                                          className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                          value={condition.vipFee}
-                                          onChange={e => updateDateCondition(condition.id, 'vipFee', Number(e.target.value))}
-                                        />
-                                        <span className="text-xs text-gray-500">元</span>
-                                        <span className="text-xs text-gray-500">
-                                          (上限: {condition.generalFee}元)
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-3">
-                                        <input
-                                          type="radio"
-                                          name={`vip-readable-${condition.id}`}
-                                          value="not-readable"
-                                          checked={!condition.vipReadable}
-                                          onChange={() => updateDateCondition(condition.id, 'vipReadable', false)}
-                                          className="accent-primary-600"
-                                        />
-                                        <span className="text-sm text-gray-700">不可閱讀</span>
-                                      </div>
-                                      <div className="flex items-center gap-3">
-                                        <input
-                                          type="radio"
-                                          name={`vip-readable-${condition.id}`}
-                                          value="readable"
-                                          checked={condition.vipReadable}
-                                          onChange={() => updateDateCondition(condition.id, 'vipReadable', true)}
-                                          className="accent-primary-600"
-                                        />
-                                        <span className="text-sm text-gray-700">可以閱讀</span>
-                                        {condition.vipReadable && (
-                                          <>
-                                            <input
-                                              type="number"
-                                              min={0}
-                                              placeholder="0"
-                                              className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                              value={condition.vipFee}
-                                              onChange={e => updateDateCondition(condition.id, 'vipFee', Number(e.target.value))}
-                                            />
-                                            <span className="text-xs text-gray-500">元</span>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
@@ -1676,128 +1342,9 @@ const ContentCreator: React.FC = () => {
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="bg-gray-50 rounded-xl p-6">
-                                 {/* Preview Cover Image */}
-                 {coverImage && (
-                   <div className="mb-6">
-                     <img 
-                       src={coverImage} 
-                       alt="封面圖片" 
-                       className="w-full aspect-video object-cover rounded-xl" 
-                     />
-                   </div>
-                 )}
-                
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">{title || '（未命名文章）'}</h2>
-                <div className="text-gray-700 leading-relaxed mb-4 whitespace-pre-line">{content || '（無內容）'}</div>
-                
-                {tags.length > 0 && (
-                  <div className="flex gap-2 mb-4">
-                    {tags.map(tag => (
-                      <span key={tag} className="bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-sm">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                
-                {(images.length > 0 || videos.length > 0 || audioFiles.length > 0) && (
-                  <div className="border-t border-gray-200 pt-4 mt-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">附加多媒體</h4>
-                    <div className="flex flex-wrap gap-4">
-                      {images.map((img, idx) => (
-                        <div key={`img-${idx}-${img.substring(0, 20)}`} className="relative group cursor-pointer">
-                          <img 
-                            src={img} 
-                            alt="附加圖片" 
-                            className="w-32 h-32 object-cover rounded-lg transition-transform group-hover:scale-105" 
-                            onClick={() => handleMediaClick(img, 'image', `image_${idx + 1}`, '附加圖片')}
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Image size={24} className="text-white" />
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="absolute -top-2 -right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-20 shadow-lg"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const newImages = images.filter((_, i) => i !== idx);
-                              setImages(newImages);
-                            }}
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                      
-                      {videos.map((video, idx) => (
-                        <div key={`video-${idx}-${video.substring(0, 20)}`} className="relative group cursor-pointer">
-                          <video 
-                            src={video} 
-                            className="w-32 h-32 object-cover rounded-lg transition-transform group-hover:scale-105"
-                            muted
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-30 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center">
-                            <div className="opacity-100 group-hover:opacity-100 transition-opacity">
-                              <Play size={32} className="text-white" />
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="absolute -top-2 -right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-20 shadow-lg"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const newVideos = videos.filter((_, i) => i !== idx);
-                              setVideos(newVideos);
-                            }}
-                          >
-                            <X size={12} />
-                          </button>
-                          <div 
-                            className="absolute inset-0 cursor-pointer"
-                            onClick={() => handleMediaClick(video, 'video', `video_${idx + 1}`, '附加影片')}
-                          />
-                        </div>
-                      ))}
-
-                      {audioFiles.map((audio, idx) => (
-                        <div key={`audio-${idx}-${audio.substring(0, 20)}`} className="relative group cursor-pointer">
-                          <div 
-                            className="w-32 h-32 bg-gradient-to-br from-blue-400 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105"
-                            onClick={() => handleMediaClick(audio, 'audio', `audio_${idx + 1}`, '附加音頻')}
-                          >
-                            <Music size={48} className="text-white" />
-                          </div>
-                          <button
-                            type="button"
-                            className="absolute -top-2 -right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-20 shadow-lg"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const newAudioFiles = audioFiles.filter((_, i) => i !== idx);
-                              setAudioFiles(newAudioFiles);
-                            }}
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="text-xs text-gray-500 mt-4">
-                  狀態：{status === 'draft' ? '草稿' : '已發布'}
-                </div>
-              </div>
-            )}
           </div>
         </div>
+        )}
 
         {/* Articles List */}
         <div>
@@ -1862,21 +1409,21 @@ const ContentCreator: React.FC = () => {
                       ))}
                     </div>
                     
-                    {/* 顯示附加圖片和影片 */}
-                    {(article.images && article.images.length > 0) || (article.videos && article.videos.length > 0) ? (
+                    {/* 顯示附加圖片、影片和音頻 */}
+                    {(article.images && article.images.length > 0) || (article.videos && article.videos.length > 0) || (article.audios && article.audios.length > 0) ? (
                       <div className="mb-4">
                         <h4 className="text-xs font-medium text-gray-700 mb-2">附加多媒體</h4>
                         <div className="flex flex-wrap gap-2">
                           {article.images && article.images.map((img, idx) => (
-                            <div 
-                              key={idx} 
+                            <div
+                              key={idx}
                               className="relative group cursor-pointer"
                               onClick={() => handleMediaClick(img.url, 'image', img.caption || `附加圖片 ${idx + 1}`, img.caption)}
                             >
-                              <img 
-                                src={img.url} 
-                                alt={img.caption || `附加圖片 ${idx + 1}`} 
-                                className="w-16 h-16 object-cover rounded-lg transition-transform group-hover:scale-105" 
+                              <img
+                                src={img.url}
+                                alt={img.caption || `附加圖片 ${idx + 1}`}
+                                className="w-16 h-16 object-cover rounded-lg transition-transform group-hover:scale-105"
                               />
                               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1886,14 +1433,14 @@ const ContentCreator: React.FC = () => {
                             </div>
                           ))}
                           {article.videos && article.videos.map((vid, idx) => (
-                            <div 
-                              key={idx} 
+                            <div
+                              key={idx}
                               className="relative group cursor-pointer"
                               onClick={() => handleMediaClick(vid.url, 'video', vid.caption || `附加影片 ${idx + 1}`, vid.caption)}
                             >
-                              <video 
-                                src={vid.url} 
-                                className="w-20 h-16 object-cover rounded-lg transition-transform group-hover:scale-105" 
+                              <video
+                                src={vid.url}
+                                className="w-20 h-16 object-cover rounded-lg transition-transform group-hover:scale-105"
                                 muted
                               />
                               <div className="absolute inset-0 bg-black bg-opacity-30 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center">
@@ -1901,6 +1448,18 @@ const ContentCreator: React.FC = () => {
                                   <Play size={16} className="text-white" />
                                 </div>
                               </div>
+                            </div>
+                          ))}
+                          {article.audios && article.audios.map((aud, idx) => (
+                            <div
+                              key={idx}
+                              className="relative group cursor-pointer"
+                              onClick={() => handleMediaClick(aud.url, 'audio', aud.caption || `附加音頻 ${idx + 1}`, aud.caption)}
+                            >
+                              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105">
+                                <Music size={24} className="text-white" />
+                              </div>
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg" />
                             </div>
                           ))}
                         </div>
