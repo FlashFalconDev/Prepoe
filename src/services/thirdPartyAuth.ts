@@ -62,17 +62,24 @@ const getThirdPartyConfig = (): ThirdPartyConfig => ({
 });
 
 // 從後端取得 state
-const fetchStateFromBackend = async (): Promise<string> => {
+const fetchStateFromBackend = async (nextPath?: string): Promise<string> => {
   const clientSid = localStorage.getItem('client_sid') || import.meta.env.VITE_CLIENT_SID;
-  const { data } = await axios.get(`${API_BASE}/api/auth/generate_state/?client_sid=${clientSid}`);
+  let url = `${API_BASE}/api/auth/generate_state/?client_sid=${clientSid}`;
+
+  // 如果有 next 路徑，附加到 URL
+  if (nextPath) {
+    url += `&next=${encodeURIComponent(nextPath)}`;
+  }
+
+  const { data } = await axios.get(url);
   return data.state;
 };
 
 // Google 登入
-export const handleGoogleLogin = async (): Promise<void> => {
+export const handleGoogleLogin = async (nextPath?: string): Promise<void> => {
   try {
     const config = getThirdPartyConfig();
-    const state = await fetchStateFromBackend();
+    const state = await fetchStateFromBackend(nextPath);
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${config.google.clientId}&` +
       `redirect_uri=${encodeURIComponent(config.google.redirectUri)}&` +
@@ -87,17 +94,17 @@ export const handleGoogleLogin = async (): Promise<void> => {
 };
 
 // LINE 登入
-export const handleLineLogin = async (): Promise<void> => {
+export const handleLineLogin = async (nextPath?: string): Promise<void> => {
   try {
     const config = getThirdPartyConfig();
-    
+
     // 檢查 LINE Client ID 是否設定
     if (!config.line.clientId) {
       throw new Error('LINE Client ID 未設定，請檢查環境變數 VITE_LINE_CLIENT_ID');
     }
-    
-    const state = await fetchStateFromBackend();
-    
+
+    const state = await fetchStateFromBackend(nextPath);
+
     // 構建 LINE 授權 URL，確保所有參數都正確編碼
     const lineAuthUrl = new URL('https://access.line.me/oauth2/v2.1/authorize');
     lineAuthUrl.searchParams.set('response_type', 'code');
@@ -114,10 +121,10 @@ export const handleLineLogin = async (): Promise<void> => {
 };
 
 // Facebook 登入
-export const handleFacebookLogin = async (): Promise<void> => {
+export const handleFacebookLogin = async (nextPath?: string): Promise<void> => {
   try {
     const config = getThirdPartyConfig();
-    const state = await fetchStateFromBackend();
+    const state = await fetchStateFromBackend(nextPath);
     const facebookAuthUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
       `client_id=${config.facebook.appId}&` +
       `redirect_uri=${encodeURIComponent(config.facebook.redirectUri)}&` +
@@ -132,10 +139,10 @@ export const handleFacebookLogin = async (): Promise<void> => {
 };
 
 // Apple 登入
-export const handleAppleLogin = async (): Promise<void> => {
+export const handleAppleLogin = async (nextPath?: string): Promise<void> => {
   try {
     const config = getThirdPartyConfig();
-    const state = await fetchStateFromBackend();
+    const state = await fetchStateFromBackend(nextPath);
     const appleAuthUrl = `https://appleid.apple.com/auth/authorize?` +
       `client_id=${config.apple.clientId}&` +
       `redirect_uri=${encodeURIComponent(config.apple.redirectUri)}&` +

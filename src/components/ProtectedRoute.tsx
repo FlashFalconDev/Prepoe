@@ -40,6 +40,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (!isAuthenticated) {
     // 保存當前路徑和查詢參數，登入後可以跳轉回來
+    console.log('🔐 ProtectedRoute - 未登入，儲存當前位置:', location);
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

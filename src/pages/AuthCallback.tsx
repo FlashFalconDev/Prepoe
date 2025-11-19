@@ -9,6 +9,7 @@ import { normalizePath, getBasename } from '../utils/pathUtils';
 const AuthCallback: React.FC = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const navigate = useNavigate();
   const { login } = useAuth();
   const calledRef = useRef(false); // 防止重複呼叫
@@ -34,17 +35,21 @@ const AuthCallback: React.FC = () => {
             login(result.user);
           }
           
-          // 從 sessionStorage 獲取原始路徑，如果沒有則跳轉到首頁
-          const redirectPath = sessionStorage.getItem('redirectAfterLogin') || '/';
-          sessionStorage.removeItem('redirectAfterLogin'); // 清除已使用的路徑
-          
+          // 從後端 API 回應取得 next 路徑，如果沒有則跳轉到首頁
+          const redirectPath = result.next || '/';
+          console.log('📍 AuthCallback - 從後端 API 取得 next 路徑:', redirectPath);
+
+          // 顯示調試資訊
+          setDebugInfo(`將跳轉到: ${redirectPath}`);
+
           // 清除 URL 上的 code/state，避免刷新重複觸發
           const basename = getBasename();
           window.history.replaceState({}, document.title, basename);
-          
+
           // 標準化重定向路徑
           const normalizedPath = normalizePath(redirectPath);
-          
+          console.log('🚀 AuthCallback - 即將跳轉到:', normalizedPath);
+
           setTimeout(() => {
             navigate(normalizedPath, { replace: true });
           }, 1500);
@@ -104,6 +109,12 @@ const AuthCallback: React.FC = () => {
         <p className="text-gray-600 mb-6">
           {message}
         </p>
+        {/* 調試資訊 */}
+        {debugInfo && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800 font-mono break-all">{debugInfo}</p>
+          </div>
+        )}
         {status === 'error' && (
           <button
             onClick={() => navigate('/login')}

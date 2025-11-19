@@ -14,9 +14,21 @@ const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isThirdPartyLoading, setIsThirdPartyLoading] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const navigate = useNavigate();
   const location = useLocation();
   const { login: authLogin } = useAuth();
+
+  // 顯示調試資訊
+  React.useEffect(() => {
+    const fromLocation = location.state?.from;
+    if (fromLocation) {
+      const fullPath = `${fromLocation.pathname}${fromLocation.search || ''}`;
+      setDebugInfo(`原始路徑: ${fullPath}`);
+    } else {
+      setDebugInfo('沒有原始路徑');
+    }
+  }, [location]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,23 +67,27 @@ const Login: React.FC = () => {
   };
 
   // 第三方登入處理函數
-  const handleThirdPartyAuth = async (provider: string, authFunction: () => Promise<void>) => {
+  const handleThirdPartyAuth = async (provider: string, authFunction: (nextPath?: string) => Promise<void>) => {
     try {
       setIsThirdPartyLoading(provider);
       setError('');
 
-      // 保存原始路徑和查詢參數到 sessionStorage，因為第三方登入會跳轉到外部頁面
+      // 取得原始路徑並傳給後端
       const fromLocation = location.state?.from;
+      console.log('🔍 Login - fromLocation:', fromLocation);
+      let nextPath: string | undefined;
+
       if (fromLocation) {
         const fullPath = `${fromLocation.pathname}${fromLocation.search || ''}`;
-        const normalizedPath = normalizePath(fullPath);
-        sessionStorage.setItem('redirectAfterLogin', normalizedPath);
+        nextPath = normalizePath(fullPath);
+        console.log('💾 Login - 將傳遞給後端的 next 路徑:', nextPath);
       } else {
-        sessionStorage.setItem('redirectAfterLogin', '/');
+        console.log('⚠️ Login - 沒有 fromLocation');
       }
-      
-      await authFunction();
-      
+
+      // 將 next 路徑傳給授權函數
+      await authFunction(nextPath);
+
       // 注意：第三方登入會跳轉到外部頁面，所以這裡不會執行到
       // 實際的跳轉會在 AuthCallback 頁面處理
     } catch (err: any) {
@@ -85,6 +101,13 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+        {/* 調試資訊 - 開發時顯示 */}
+        {debugInfo && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800 font-mono break-all">{debugInfo}</p>
+          </div>
+        )}
+
         {/* Logo/标题区域 */}
         <div className="text-center mb-8">
           <div className={`w-16 h-16 ${AI_COLORS.gradient} rounded-full flex items-center justify-center mx-auto mb-4`}>
