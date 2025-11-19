@@ -95,7 +95,6 @@ const EventJoin: React.FC = () => {
   
   // 條款和備註
   const [agreeTerms, setAgreeTerms] = useState(false);
-  const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [showRemarkSection, setShowRemarkSection] = useState(false);
   const [remarkNote, setRemarkNote] = useState('');
 
@@ -401,11 +400,6 @@ const EventJoin: React.FC = () => {
       showError('請同意活動條款');
       return;
     }
-    
-    if (!agreePrivacy) {
-      showError('請同意隱私政策');
-      return;
-    }
 
     // 確認報名（顯示總價和人數）
     const primaryContactName = participants[primaryContactIndex]?.name || `參加者 ${primaryContactIndex + 1}`;
@@ -431,9 +425,12 @@ const EventJoin: React.FC = () => {
 
       // 如果是付費活動，使用訂單創建 API
       if (totalPrice > 0 && paymentType) {
-        // 清理所有參加者的數據，移除未顯示的條件欄位
-        const cleanedParticipants = participants.map(participant => cleanParticipantData(participant));
-        
+        // 清理所有參加者的數據，移除未顯示的條件欄位，並加入 is_primary_contact 欄位
+        const cleanedParticipants = participants.map((participant, index) => ({
+          ...cleanParticipantData(participant),
+          is_primary_contact: index === primaryContactIndex ? 1 : 0
+        }));
+
         const orderData: CreateOrderRequest = {
           items: [
             {
@@ -445,7 +442,6 @@ const EventJoin: React.FC = () => {
           participant_info: {
             participant_count: participantCount,
             participants: cleanedParticipants,
-            primary_contact_index: primaryContactIndex,
             contact_note: contactNote,
             remark: remarkNote
           } as any
@@ -493,7 +489,6 @@ const EventJoin: React.FC = () => {
             setContactNote('');
             setPaymentType('');
             setAgreeTerms(false);
-            setAgreePrivacy(false);
             setRemarkNote('');
             setShowRemarkSection(false);
 
@@ -518,7 +513,6 @@ const EventJoin: React.FC = () => {
         setContactNote('');
         setPaymentType('');
         setAgreeTerms(false);
-        setAgreePrivacy(false);
         setRemarkNote('');
         setShowRemarkSection(false);
       }
@@ -558,23 +552,16 @@ const EventJoin: React.FC = () => {
     );
   }
 
-  // 活動不存在或已結束
-  if (!eventInfo || eventInfo.event_status !== 'registration_open') {
+  // 活動不存在
+  if (!eventInfo) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <div className="text-gray-400 mb-4">
             <i className="ri-calendar-line text-6xl"></i>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {!eventInfo ? '活動不存在' : '報名已截止'}
-          </h3>
-          <p className="text-gray-500 mb-6">
-            {!eventInfo 
-              ? '找不到指定的活動，請檢查連結是否正確。'
-              : '此活動的報名時間已結束，無法再報名參加。'
-            }
-          </p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">活動不存在</h3>
+          <p className="text-gray-500 mb-6">找不到指定的活動，請檢查連結是否正確。</p>
           <button
             onClick={() => navigate('/')}
             className={`inline-flex items-center gap-2 px-4 py-2 ${AI_COLORS.button} rounded-xl transition-colors`}
@@ -586,6 +573,9 @@ const EventJoin: React.FC = () => {
       </div>
     );
   }
+
+  // 判斷是否可以報名
+  const isRegistrationOpen = eventInfo.event_status === 'registration_open';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -679,7 +669,18 @@ const EventJoin: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 text-gray-500">
                     <i className="ri-user-line"></i>
-                    <span>{eventInfo.min_participants} - {eventInfo.max_participants} 人</span>
+                    <span>
+                      {eventInfo.min_participants} - {eventInfo.max_participants} 人
+                      {eventInfo.current_participants_count !== undefined && (
+                        <span className={`ml-2 font-medium ${
+                          eventInfo.current_participants_count >= eventInfo.min_participants
+                            ? 'text-green-600'
+                            : 'text-orange-600'
+                        }`}>
+                          (已報名 {eventInfo.current_participants_count})
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </div>
 
@@ -697,16 +698,18 @@ const EventJoin: React.FC = () => {
             </div>
           </div>
 
-          {/* 報名表單 */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">報名表單</h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {formFields && formFields.length > 0 ? (
-                  <>
-                    {/* 報名人數選擇（如果允許多人報名） */}
-                    {eventInfo && eventInfo.max_participants_per_user > 1 && (
+          {/* 報名表單 - 只在報名開放時顯示 */}
+          {isRegistrationOpen && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6">報名表單</h2>
+
+                {/* 報名表單內容 */}
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {formFields && formFields.length > 0 ? (
+                    <>
+                      {/* 報名人數選擇（如果允許多人報名） */}
+                      {eventInfo && eventInfo.max_participants_per_user > 1 && (
                       <div className="pb-6 border-b">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           報名人數 <span className="text-red-500">*</span>
@@ -900,23 +903,6 @@ const EventJoin: React.FC = () => {
                           <span className="text-red-500 ml-1">*</span>
                         </label>
                       </div>
-                      
-                      <div className={`flex items-start gap-3 p-3 rounded-lg ${
-                        !agreePrivacy ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          id="agree_privacy"
-                          checked={agreePrivacy}
-                          onChange={(e) => setAgreePrivacy(e.target.checked)}
-                          className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 rounded"
-                          required
-                        />
-                        <label htmlFor="agree_privacy" className="flex-1 text-sm text-gray-700 cursor-pointer">
-                          我同意 <a href="#" className="text-purple-600 hover:text-purple-700 underline">隱私政策</a> 和個人資料處理方式
-                          <span className="text-red-500 ml-1">*</span>
-                        </label>
-                      </div>
                     </div>
 
                     {/* 備註區塊（可展開） */}
@@ -952,37 +938,38 @@ const EventJoin: React.FC = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* 提交按鈕 */}
+                    <div className="pt-4">
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className={`w-full px-6 py-3 ${AI_COLORS.button} rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-lg`}
+                      >
+                        {submitting ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            提交中...
+                          </div>
+                        ) : (
+                          <>
+                            確認報名
+                            {participantCount > 1 && <span className="ml-2">({participantCount}人)</span>}
+                            {totalPrice > 0 && <span className="ml-2">NT$ {totalPrice.toLocaleString()}</span>}
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <div className="text-center text-gray-500 py-8">
                     <p>此活動尚未配置報名表單</p>
                   </div>
                 )}
-                
-                {/* 提交按鈕 */}
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className={`w-full px-6 py-3 ${AI_COLORS.button} rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-lg`}
-                  >
-                    {submitting ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        提交中...
-                      </div>
-                    ) : (
-                      <>
-                        確認報名
-                        {participantCount > 1 && <span className="ml-2">({participantCount}人)</span>}
-                        {totalPrice > 0 && <span className="ml-2">NT$ {totalPrice.toLocaleString()}</span>}
-                      </>
-                    )}
-                  </button>
-                </div>
               </form>
             </div>
           </div>
+          )}
         </div>
       </div>
 

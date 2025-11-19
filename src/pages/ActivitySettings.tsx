@@ -86,7 +86,10 @@ const ActivitySettings: React.FC = () => {
     event_status: 'draft' as 'draft' | 'registration_open' | 'registration_closed' | 'in_progress' | 'completed' | 'cancelled',
     form_fields: [] as FormField[],
     tags: [] as string[],
-    main_image_file: undefined as File | undefined
+    main_image_file: undefined as File | undefined,
+    is_public_event: true,
+    waiting_payment_minutes: 180,
+    terms_of_event: ''
   });
 
   // 圖片上傳相關狀態
@@ -96,6 +99,7 @@ const ActivitySettings: React.FC = () => {
   // 標籤相關狀態
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [showTermsSection, setShowTermsSection] = useState(false);
 
   // 早鳥價設定彈窗狀態
   const [showBasePriceEarlyBirdModal, setShowBasePriceEarlyBirdModal] = useState(false);
@@ -476,7 +480,10 @@ const ActivitySettings: React.FC = () => {
         event_status: 'draft',
         form_fields: [],
         tags: [],
-        main_image_file: undefined
+        main_image_file: undefined,
+        is_public_event: true,
+        waiting_payment_minutes: 180,
+        terms_of_event: ''
       });
       setAdditionalImages([]); // 重置圖片列表
       setTagInput('');
@@ -890,7 +897,10 @@ const ActivitySettings: React.FC = () => {
                       event_status: 'draft',
                       form_fields: [],
                       tags: [],
-                      main_image_file: undefined
+                      main_image_file: undefined,
+                      is_public_event: true,
+                      waiting_payment_minutes: 180,
+                      terms_of_event: ''
                     });
                     setTagInput('');
                     setShowTagSuggestions(false);
@@ -942,7 +952,10 @@ const ActivitySettings: React.FC = () => {
                       event_status: 'draft',
                       form_fields: [],
                       tags: [],
-                      main_image_file: undefined
+                      main_image_file: undefined,
+                      is_public_event: true,
+                      waiting_payment_minutes: 180,
+                      terms_of_event: ''
                     });
                     setTagInput('');
                     setShowTagSuggestions(false);
@@ -989,30 +1002,6 @@ const ActivitySettings: React.FC = () => {
                              </span>
                            </div>
                          </div>
-
-                         {/* 其他圖片縮圖 */}
-                         {event.images.length > 1 && (
-                           <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                             <div className="flex gap-2 overflow-x-auto">
-                               {event.images.slice(1).map((image, index) => (
-                                 <div
-                                   key={index}
-                                   className="flex-shrink-0 w-16 h-16 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-orange-400 transition-all"
-                                   onClick={() => {
-                                     setViewingImageUrl(image.url);
-                                     setShowImageViewer(true);
-                                   }}
-                                 >
-                                   <img
-                                     src={image.url}
-                                     alt={`${event.name} - 圖片 ${index + 2}`}
-                                     className="w-full h-full object-cover"
-                                   />
-                                 </div>
-                               ))}
-                             </div>
-                           </div>
-                         )}
                        </div>
                      )}
 
@@ -1076,7 +1065,10 @@ const ActivitySettings: React.FC = () => {
                                   event_status: event.event_status,
                                   form_fields: processedFormFields,
                                   tags: event.item_tags?.map(tag => tag.name) || [],
-                                  main_image_file: undefined
+                                  main_image_file: undefined,
+                                  is_public_event: (event as any).is_public_event !== undefined ? (event as any).is_public_event : true,
+                                  waiting_payment_minutes: (event as any).waiting_payment_minutes || 180,
+                                  terms_of_event: (event as any).terms_of_event || ''
                                 });
                                // 載入圖片 (第一張即為主圖)
                                if (event.images && event.images.length > 0) {
@@ -1123,7 +1115,18 @@ const ActivitySettings: React.FC = () => {
                          </div>
                          <div className="flex items-center gap-2 text-sm text-gray-500">
                           <i className="ri-user-line" style={{ fontSize: '14px' }}></i>
-                          <span>最少 {event.min_participants} 人</span>
+                          <span>
+                            {event.min_participants} - {event.max_participants} 人
+                            {event.current_participants_count !== undefined && (
+                              <span className={`ml-2 font-medium ${
+                                event.current_participants_count >= event.min_participants
+                                  ? 'text-green-600'
+                                  : 'text-orange-600'
+                              }`}>
+                                (已報名 {event.current_participants_count})
+                              </span>
+                            )}
+                          </span>
                         </div>
                          <div className="flex items-center gap-2 text-sm text-gray-500">
                            <i className="ri-money-dollar-circle-line" style={{ fontSize: '14px' }}></i>
@@ -1147,6 +1150,31 @@ const ActivitySettings: React.FC = () => {
                             ))}
                           </div>
                         )}
+
+                        {/* 其他圖片縮圖 - 顯示在按鈕上方 */}
+                        {event.images && event.images.length > 1 && (
+                          <div className="mb-3">
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                              {event.images.slice(1).map((image, index) => (
+                                <div
+                                  key={index}
+                                  className="flex-shrink-0 w-16 h-16 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-orange-400 transition-all"
+                                  onClick={() => {
+                                    setViewingImageUrl(image.url);
+                                    setShowImageViewer(true);
+                                  }}
+                                >
+                                  <img
+                                    src={image.url}
+                                    alt={`${event.name} - 圖片 ${index + 2}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                        {/* 操作按鈕 - 固定在底部 */}
                        <div className="border-t pt-3 mt-auto space-y-2">
                          <div className="grid grid-cols-2 gap-2">
@@ -1551,17 +1579,51 @@ const ActivitySettings: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="use-check-in"
-                      checked={eventForm.use_check_in}
-                      onChange={(e) => setEventForm({ ...eventForm, use_check_in: e.target.checked })}
-                      className="accent-orange-600 w-4 h-4"
-                    />
-                    <label htmlFor="use-check-in" className="text-sm text-gray-700">
-                      啟用報到功能
-                    </label>
+                  {/* 啟用報到功能、公開活動、未付款訂單時效 - 同一行 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    {/* 啟用報到功能 */}
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="use-check-in"
+                        checked={eventForm.use_check_in}
+                        onChange={(e) => setEventForm({ ...eventForm, use_check_in: e.target.checked })}
+                        className="accent-orange-600 w-4 h-4"
+                      />
+                      <label htmlFor="use-check-in" className="text-sm text-gray-700">
+                        啟用報到功能
+                      </label>
+                    </div>
+
+                    {/* 公開活動 */}
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="is-public-event"
+                        checked={eventForm.is_public_event}
+                        onChange={(e) => setEventForm({ ...eventForm, is_public_event: e.target.checked })}
+                        className="accent-orange-600 w-4 h-4"
+                      />
+                      <label htmlFor="is-public-event" className="text-sm text-gray-700">
+                        公開活動
+                      </label>
+                    </div>
+
+                    {/* 未付款訂單時效 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        未付款訂單時效（分）
+                      </label>
+                      <input
+                        type="number"
+                        value={eventForm.waiting_payment_minutes}
+                        onChange={(e) => setEventForm({ ...eventForm, waiting_payment_minutes: parseInt(e.target.value) || 180 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        min="1"
+                        placeholder="預設 180 分鐘"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">訂單建立後，多久時間內未完成付款將自動取消</p>
+                    </div>
                   </div>
 
                   {/* 表單欄位編輯器 */}
@@ -1571,6 +1633,49 @@ const ActivitySettings: React.FC = () => {
                       onChange={(updatedFields) => setEventForm({ ...eventForm, form_fields: updatedFields })}
                       earlyBirdConfig={eventForm.earlyBirdConfig}
                     />
+                  </div>
+
+                  {/* 活動條款 */}
+                  <div className="pt-4 border-t">
+                    {/* 活動條款 - 可展開的文字區塊 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          活動條款
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowTermsSection(!showTermsSection)}
+                          className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                        >
+                          {showTermsSection ? (
+                            <>
+                              <i className="ri-arrow-up-s-line"></i>
+                              隱藏
+                            </>
+                          ) : (
+                            <>
+                              <i className="ri-arrow-down-s-line"></i>
+                              展開填寫
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {showTermsSection && (
+                        <textarea
+                          value={eventForm.terms_of_event}
+                          onChange={(e) => setEventForm({ ...eventForm, terms_of_event: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          placeholder="輸入活動條款內容（選填）"
+                          rows={6}
+                        />
+                      )}
+                      {!showTermsSection && eventForm.terms_of_event && (
+                        <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                          已填寫條款內容（{eventForm.terms_of_event.length} 字）
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex gap-3 pt-4">

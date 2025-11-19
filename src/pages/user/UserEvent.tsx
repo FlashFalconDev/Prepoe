@@ -69,49 +69,9 @@ const UserEvent: React.FC = () => {
     }
   };
 
-  // 計算活動即時狀態(根據開始/結束時間)
-  const getEventRealTimeStatus = (event: ItemEventItem): {
-    status: string;
-    displayText: string;
-    canRegister: boolean;
-  } => {
-    const now = new Date();
-    const startTime = new Date(event.start_time);
-    const endTime = new Date(event.end_time);
-
-    // 活動已結束
-    if (now > endTime) {
-      return {
-        status: 'ended',
-        displayText: '活動結束',
-        canRegister: false
-      };
-    }
-
-    // 活動進行中(已開始但未結束)
-    if (now >= startTime && now <= endTime) {
-      return {
-        status: 'in_progress',
-        displayText: '活動進行中',
-        canRegister: false
-      };
-    }
-
-    // 活動尚未開始 - 根據後端狀態判斷
-    if (event.event_status === 'registration_open') {
-      return {
-        status: 'registration_open',
-        displayText: '報名開放',
-        canRegister: true
-      };
-    }
-
-    // 其他狀態(報名截止、草稿等)
-    return {
-      status: event.event_status,
-      displayText: event.event_status_display,
-      canRegister: false
-    };
+  // 判斷是否可以報名 - 直接使用後端狀態
+  const canRegister = (event: ItemEventItem): boolean => {
+    return event.event_status === 'registration_open';
   };
 
   // 複製報名連結
@@ -253,23 +213,19 @@ const UserEvent: React.FC = () => {
                       alt={event.name}
                       className="w-full h-full object-cover"
                     />
-                    {/* 活動狀態標籤 */}
+                    {/* 活動狀態標籤 - 使用後端狀態 */}
                     <div className="absolute top-3 right-3">
-                      {(() => {
-                        const realTimeStatus = getEventRealTimeStatus(event);
-                        return (
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            realTimeStatus.status === 'registration_open' ? 'bg-green-100 text-green-700' :
-                            realTimeStatus.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                            realTimeStatus.status === 'ended' ? 'bg-gray-100 text-gray-700' :
-                            realTimeStatus.status === 'registration_closed' ? 'bg-yellow-100 text-yellow-700' :
-                            realTimeStatus.status === 'completed' ? `${AI_COLORS.bgLight} ${AI_COLORS.textDark}` :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {realTimeStatus.displayText}
-                          </span>
-                        );
-                      })()}
+                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                        event.event_status === 'registration_open' ? 'bg-green-500 text-white' :
+                        event.event_status === 'registration_closed' ? 'bg-yellow-100 text-yellow-700' :
+                        event.event_status === 'in_progress' ? 'bg-blue-500 text-white' :
+                        event.event_status === 'completed' ? 'bg-purple-500 text-white' :
+                        event.event_status === 'cancelled' ? 'bg-red-500 text-white' :
+                        event.event_status === 'draft' ? 'bg-gray-100 text-gray-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {event.event_status_display}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -289,7 +245,18 @@ const UserEvent: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <i className="ri-user-line" style={{ fontSize: '14px' }}></i>
-                      <span>{event.min_participants} - {event.max_participants} 人</span>
+                      <span>
+                        {event.min_participants} - {event.max_participants} 人
+                        {event.current_participants_count !== undefined && (
+                          <span className={`ml-2 font-medium ${
+                            event.current_participants_count >= event.min_participants
+                              ? 'text-green-600'
+                              : 'text-orange-600'
+                          }`}>
+                            (已報名 {event.current_participants_count})
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <i className="ri-money-dollar-circle-line" style={{ fontSize: '14px' }}></i>
@@ -314,33 +281,26 @@ const UserEvent: React.FC = () => {
                     </div>
                   )}
                   
-                  {/* 操作按鈕 - 固定在底部 */}
+                  {/* 操作按鈕 - 固定在底部，使用後端狀態 */}
                   <div className="flex gap-2 mt-auto">
-                    {(() => {
-                      const realTimeStatus = getEventRealTimeStatus(event);
-                      return (
-                        <>
-                          <button
-                            onClick={() => handleJoinEvent(event)}
-                            disabled={!realTimeStatus.canRegister}
-                            className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm`}
-                          >
-                            {realTimeStatus.canRegister ? '立即報名' :
-                             realTimeStatus.status === 'ended' ? '活動結束' :
-                             realTimeStatus.status === 'in_progress' ? '進行中' :
-                             '報名截止'}
-                          </button>
+                    <button
+                      onClick={() => handleJoinEvent(event)}
+                      className={`flex-1 px-4 py-2 rounded-xl transition-colors text-sm font-medium ${
+                        canRegister(event)
+                          ? `${AI_COLORS.button}`
+                          : 'bg-gray-400 text-white cursor-not-allowed'
+                      }`}
+                    >
+                      {canRegister(event) ? '立即報名' : '查看詳情'}
+                    </button>
 
-                          <button
-                            onClick={() => handleCopyJoinLink(event)}
-                            className="px-3 py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                            title="複製報名連結"
-                          >
-                            <i className="ri-link" style={{ fontSize: '16px' }}></i>
-                          </button>
-                        </>
-                      );
-                    })()}
+                    <button
+                      onClick={() => handleCopyJoinLink(event)}
+                      className="px-3 py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      title="複製報名連結"
+                    >
+                      <i className="ri-link" style={{ fontSize: '16px' }}></i>
+                    </button>
                   </div>
                 </div>
               </div>

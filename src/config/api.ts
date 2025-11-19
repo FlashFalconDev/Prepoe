@@ -1383,6 +1383,10 @@ export interface ItemEventItem {
   }>;
   created_at: string;
   updated_at: string;
+  current_participants_count?: number;  // 目前已報名人數
+  is_public_event?: boolean;  // 是否為公開活動
+  waiting_payment_minutes?: number;  // 未付款訂單時效（分鐘）
+  terms_of_event?: string;  // 活動條款
   statistics?: {
     total_registrations: number;
     paid_registrations: number;
