@@ -22,6 +22,7 @@ const Creator = React.lazy(() => import('./pages/Creator'));
 const VideoCreation = React.lazy(() => import('./pages/VideoCreation'));
 const Audio = React.lazy(() => import('./pages/Audio'));
 const Article = React.lazy(() => import('./pages/Article'));
+const CardHack = React.lazy(() => import('./pages/CardHack'));
 const Chat = React.lazy(() => import('./pages/Chat'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const ActivitySettings = React.lazy(() => import('./pages/ActivitySettings'));
@@ -31,6 +32,16 @@ const AIAssistantForm = React.lazy(() => import('./pages/AIAssistantForm'));
 const DocumentForm = React.lazy(() => import('./pages/DocumentForm'));
 const DocumentList = React.lazy(() => import('./pages/DocumentList'));
 const PrivateDomain = React.lazy(() => import('./pages/PrivateDomain'));
+
+// 懶載入電子票券頁面
+const ETickets = React.lazy(() => import('./pages/ETickets'));
+const ETicketForm = React.lazy(() => import('./pages/ETicketForm'));
+
+// 懶載入管理頁面
+const ManageSelector = React.lazy(() => import('./pages/manage/ManageSelector'));
+const ManageLayout = React.lazy(() => import('./components/ManageLayout'));
+const ManageDashboard = React.lazy(() => import('./pages/manage/ManageDashboard'));
+const ManageKeys = React.lazy(() => import('./pages/manage/ManageKeys'));
 
 // 懶載入商務客戶頁面
 const BusinessOverview = React.lazy(() => import('./pages/business/BusinessOverview'));
@@ -44,6 +55,7 @@ const UserChat = React.lazy(() => import('./pages/user/UserChat'));
 const UserMentors = React.lazy(() => import('./pages/user/UserMentors'));
 const UserEvent = React.lazy(() => import('./pages/user/UserEvent'));
 const UserArticles = React.lazy(() => import('./pages/user/UserArticles'));
+const ArticleDetail = React.lazy(() => import('./pages/user/ArticleDetail'));
 const EventJoin = React.lazy(() => import('./pages/user/EventJoin'));
 const MentorDetail = React.lazy(() => import('./pages/user/MentorDetail'));
 const UserViews = React.lazy(() => import('./pages/user/UserViews'));
@@ -90,6 +102,7 @@ function App() {
                             <Route path="video-creation" element={<VideoCreation />} />
                             <Route path="audio" element={<Audio />} />
                             <Route path="article" element={<Article />} />
+                            <Route path="cardhack" element={<CardHack />} />
                           </Route>
                           {/* AI客服管理路由 */}
                           <Route path="/ai-service" element={<AIServiceManagement />} />
@@ -110,28 +123,27 @@ function App() {
                 }
               />
               
-              {/* Client 路由 - 客戶端（原 user 路由） */}
+              {/* Client 路由 - 客戶端（原 user 路由） - 允許未登入訪問 */}
               <Route
                 path="/client/*"
                 element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Suspense fallback={<LoadingSpinner />}>
-                        <Routes>
-                          <Route path="/" element={<UserMentors />} />
-                          <Route path="/chat" element={<UserChat />} />
-                          <Route path="/chat/:sessionId" element={<UserChat />} />
-                          <Route path="/mentors" element={<UserMentors />} />
-                          <Route path="/provider/:slug" element={<MentorDetail />} />
-                          <Route path="/event" element={<UserEvent />} />
-                          <Route path="/articles" element={<UserArticles />} />
-                          <Route path="/profile" element={<UserDashboard />} />
-                          <Route path="/event/join/:sku" element={<EventJoin />} />
-                          <Route path="/views" element={<UserViews />} />
-                        </Routes>
-                      </Suspense>
-                    </Layout>
-                  </ProtectedRoute>
+                  <Layout>
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Routes>
+                        <Route path="/" element={<UserMentors />} />
+                        <Route path="/chat" element={<ProtectedRoute><UserChat /></ProtectedRoute>} />
+                        <Route path="/chat/:sessionId" element={<ProtectedRoute><UserChat /></ProtectedRoute>} />
+                        <Route path="/mentors" element={<UserMentors />} />
+                        <Route path="/provider/:slug" element={<MentorDetail />} />
+                        <Route path="/event" element={<UserEvent />} />
+                        <Route path="/articles" element={<UserArticles />} />
+                        <Route path="/articles/:slug" element={<ArticleDetail />} />
+                        <Route path="/profile" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
+                        <Route path="/event/join/:sku" element={<EventJoin />} />
+                        <Route path="/views" element={<UserViews />} />
+                      </Routes>
+                    </Suspense>
+                  </Layout>
                 }
               />
 
@@ -150,6 +162,38 @@ function App() {
                         </Routes>
                       </Suspense>
                     </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Manage 路由 - 多租戶管理後台 */}
+              <Route
+                path="/manage"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <ManageSelector />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manage/:clientSid/*"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <ManageLayout>
+                        <Routes>
+                          <Route path="/" element={<ManageDashboard />} />
+                          <Route path="/keys" element={<ManageKeys />} />
+                          <Route path="/shop" element={<div className="p-8"><h1 className="text-2xl font-bold">商城設定</h1><p className="text-gray-600 mt-2">功能開發中...</p></div>} />
+                          <Route path="/cards" element={<div className="p-8"><h1 className="text-2xl font-bold">卡牌關聯</h1><p className="text-gray-600 mt-2">功能開發中...</p></div>} />
+                          <Route path="/etickets" element={<ETickets />} />
+                          <Route path="/etickets/create" element={<ETicketForm />} />
+                          <Route path="/etickets/edit/:id" element={<ETicketForm />} />
+                        </Routes>
+                      </ManageLayout>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />

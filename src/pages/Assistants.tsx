@@ -1,10 +1,10 @@
 import React from 'react';
-import { 
-  Settings, 
-  MessageSquare, 
-  HelpCircle, 
-  Calculator, 
-  Calendar, 
+import {
+  Settings,
+  MessageSquare,
+  HelpCircle,
+  Calculator,
+  Calendar,
   ArrowRight,
   Sparkles,
   Bot
