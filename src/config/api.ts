@@ -134,7 +134,7 @@ export const API_ENDPOINTS = {
   ARTICLE_LIKE: (id: number) => `${API_BASE}/article/api/articles/${id}/like/`,
   ARTICLE_COMMENTS: (id: number) => `${API_BASE}/article/api/articles/${id}/comments/`,
   ARTICLE_ADD_COMMENT: (id: number) => `${API_BASE}/article/api/articles/${id}/comments/add/`,
-  PUBLIC_ARTICLE: (slug: string) => `${API_BASE}/article/public/articles/${slug}/`,
+  PUBLIC_ARTICLE: (slug: string) => `${API_BASE}/article/api/public/articles/${slug}/`,
   TAGS: `${API_BASE}/article/api/tags/`,
   UPLOAD_MEDIA: `${API_BASE}/article/api/upload-media/`,
   UPLOAD_FILE: `${API_BASE}/api/upload_file/`,
@@ -346,6 +346,91 @@ export const API_ENDPOINTS = {
   
   // ==================== AI 模組配置 API ====================
   AI_MODULES: `${API_BASE}/ai/api/get_AI_modules/`,
+
+  // ==================== CardHack 卡牌系統 API ====================
+  // Tags API
+  CARDHACK_TAGS: `${API_BASE}/cardhack/api/tags/`,
+  CARDHACK_TAG_CREATE: `${API_BASE}/cardhack/api/tags/create/`,
+  CARDHACK_TAG_DETAIL: (tagId: number) => `${API_BASE}/cardhack/api/tags/${tagId}/`,
+  CARDHACK_TAG_UPDATE: (tagId: number) => `${API_BASE}/cardhack/api/tags/${tagId}/update/`,
+  CARDHACK_TAG_DELETE: (tagId: number) => `${API_BASE}/cardhack/api/tags/${tagId}/delete/`,
+
+  // Decks API
+  CARDHACK_DECKS: `${API_BASE}/cardhack/api/decks/`,
+  CARDHACK_DECK_CREATE: `${API_BASE}/cardhack/api/decks/create/`,
+  CARDHACK_DECK_DETAIL: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/`,
+  CARDHACK_DECK_UPDATE: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/update/`,
+  CARDHACK_DECK_DELETE: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/delete/`,
+
+  // DeckCards API
+  CARDHACK_DECK_CARDS: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/cards/`,
+  CARDHACK_DECK_CARD_CREATE: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/cards/create/`,
+  CARDHACK_DECK_CARD_DETAIL: (cardId: number) => `${API_BASE}/cardhack/api/cards/${cardId}/`,
+  CARDHACK_DECK_CARD_UPDATE: (cardId: number) => `${API_BASE}/cardhack/api/cards/${cardId}/update/`,
+  CARDHACK_DECK_CARD_DELETE: (cardId: number) => `${API_BASE}/cardhack/api/cards/${cardId}/delete/`,
+
+  // CardImages API
+  CARDHACK_CARD_IMAGES: (cardId: number) => `${API_BASE}/cardhack/api/cards/${cardId}/images/`,
+  CARDHACK_CARD_IMAGE_CREATE: (cardId: number) => `${API_BASE}/cardhack/api/cards/${cardId}/images/create/`,
+  CARDHACK_CARD_IMAGE_DELETE: (imageId: number) => `${API_BASE}/cardhack/api/images/${imageId}/delete/`,
+
+  // Interpretations API (掛在 image 下)
+  CARDHACK_INTERPRETATIONS: (imageId: number) => `${API_BASE}/cardhack/api/images/${imageId}/interpretations/`,
+  CARDHACK_INTERPRETATION_CREATE: (imageId: number) => `${API_BASE}/cardhack/api/images/${imageId}/interpretations/create/`,
+  CARDHACK_INTERPRETATION_DETAIL: (interpId: number) => `${API_BASE}/cardhack/api/interpretations/${interpId}/`,
+  CARDHACK_INTERPRETATION_UPDATE: (interpId: number) => `${API_BASE}/cardhack/api/interpretations/${interpId}/update/`,
+  CARDHACK_INTERPRETATION_DELETE: (interpId: number) => `${API_BASE}/cardhack/api/interpretations/${interpId}/delete/`,
+
+  // Spreads API
+  CARDHACK_SPREADS: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/`,
+  CARDHACK_SPREAD_CREATE: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/create/`,
+  CARDHACK_SPREAD_DETAIL: (deckId: number, spreadId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/${spreadId}/`,
+  CARDHACK_SPREAD_UPDATE: (deckId: number, spreadId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/${spreadId}/update/`,
+  CARDHACK_SPREAD_DELETE: (deckId: number, spreadId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/${spreadId}/delete/`,
+
+  // DrawSessions API
+  CARDHACK_DRAW_SESSIONS: `${API_BASE}/cardhack/api/draw-sessions/`,
+  CARDHACK_DRAW_SESSION_CREATE: `${API_BASE}/cardhack/api/draw-sessions/create/`,
+  CARDHACK_DRAW_SESSION_DETAIL: (sessionId: number) => `${API_BASE}/cardhack/api/draw-sessions/${sessionId}/`,
+
+  // ==================== ItemEticket 電子票券系統 API ====================
+
+  // 商品列表 API (會員端 - 統一商品接口)
+  SHOP_ITEMS: `${API_BASE}/item/api/items/`,
+
+  // 票券商品管理 API (管理端)
+  ETICKETS: `${API_BASE}/eticket/api/etickets/`,
+  ETICKET_CREATE: `${API_BASE}/eticket/api/etickets/create/`,
+  ETICKET_DETAIL: (eticketId: number) => `${API_BASE}/eticket/api/etickets/${eticketId}/`,
+  ETICKET_UPDATE: (eticketId: number) => `${API_BASE}/eticket/api/etickets/${eticketId}/update/`,
+  ETICKET_DELETE: (eticketId: number) => `${API_BASE}/eticket/api/etickets/${eticketId}/delete/`,
+
+  // 會員票券 API (會員端)
+  MY_ETICKETS: `${API_BASE}/eticket/api/my-etickets/`,
+  MY_ETICKET_DETAIL: (ticketNumber: string) => `${API_BASE}/eticket/api/my-etickets/${ticketNumber}/`,
+  MY_ETICKET_USE: (ticketNumber: string) => `${API_BASE}/eticket/api/my-etickets/${ticketNumber}/use/`,
+  MY_ETICKET_TRANSFER: (ticketNumber: string) => `${API_BASE}/eticket/api/my-etickets/${ticketNumber}/transfer/`,
+
+  // 票券發放 API (管理端)
+  ETICKET_ISSUE: `${API_BASE}/eticket/api/issue/`,
+  ETICKET_BATCH_ISSUE: `${API_BASE}/eticket/api/batch-issue/`,
+
+  // 票券核銷 API (管理端/POS)
+  ETICKET_VALIDATE: (ticketNumber: string) => `${API_BASE}/eticket/api/validate/${ticketNumber}/`,
+  ETICKET_REDEEM: `${API_BASE}/eticket/api/redeem/`,
+  ETICKET_CANCEL_REDEMPTION: (redemptionId: number) => `${API_BASE}/eticket/api/cancel-redemption/${redemptionId}/`,
+
+  // 觸發規則 API (管理端)
+  ETICKET_TRIGGER_RULES: `${API_BASE}/eticket/api/trigger-rules/`,
+  ETICKET_TRIGGER_RULE_CREATE: `${API_BASE}/eticket/api/trigger-rules/create/`,
+  ETICKET_TRIGGER_RULE_DETAIL: (ruleId: number) => `${API_BASE}/eticket/api/trigger-rules/${ruleId}/`,
+  ETICKET_TRIGGER_RULE_UPDATE: (ruleId: number) => `${API_BASE}/eticket/api/trigger-rules/${ruleId}/update/`,
+  ETICKET_TRIGGER_RULE_DELETE: (ruleId: number) => `${API_BASE}/eticket/api/trigger-rules/${ruleId}/delete/`,
+  ETICKET_TRIGGER_RULE_EXECUTE: (ruleId: number) => `${API_BASE}/eticket/api/trigger-rules/${ruleId}/execute/`,
+
+  // 統計 API (管理端)
+  ETICKET_STATISTICS: `${API_BASE}/eticket/api/statistics/`,
+  ETICKET_STATISTICS_DETAIL: (eticketId: number) => `${API_BASE}/eticket/api/statistics/${eticketId}/`,
 } as const;
 
 // 調試信息
@@ -385,11 +470,11 @@ const api = axios.create({
 // 添加請求攔截器來自動添加CSRF token
 api.interceptors.request.use(
   async (config) => {
-    // 對於GET請求，添加client_sid參數
+    // 對於GET請求，添加client_sid參數（如果請求中沒有指定的話）
     if (config.method?.toLowerCase() === 'get') {
       const clientSid = import.meta.env.VITE_CLIENT_SID;
-      if (clientSid) {
-        // 如果已經有params，則合併；否則創建新的params
+      // 只有在請求沒有自帶 client_sid 時才使用環境變數的預設值
+      if (clientSid && !config.params?.client_sid) {
         config.params = {
           ...config.params,
           client_sid: clientSid
@@ -625,6 +710,10 @@ export interface ArticleData {
   status: 'draft' | 'published';
   tags: string[];
   reading_conditions?: ReadingConditionItem[];
+  cover_image_pk?: number; // 封面圖片的 Static_Usage_Record pk
+  image_pks?: number[]; // 文章圖片的 Static_Usage_Record pk 列表
+  video_pks?: number[]; // 文章影片的 Static_Usage_Record pk 列表
+  audio_pks?: number[]; // 文章音訊的 Static_Usage_Record pk 列表
 }
 
 export interface ArticleFiles {
@@ -648,12 +737,21 @@ export interface Article {
     url: string;
     caption?: string;
     order: number;
+    static_usage_record_pk?: number; // Static_Usage_Record pk
   }>;
   videos?: Array<{
     id: number;
     url: string;
     caption?: string;
     order: number;
+    static_usage_record_pk?: number; // Static_Usage_Record pk
+  }>;
+  audios?: Array<{
+    id: number;
+    url: string;
+    caption?: string;
+    order: number;
+    static_usage_record_pk?: number; // Static_Usage_Record pk
   }>;
   status: 'draft' | 'published';
   created_at: string;
@@ -741,64 +839,22 @@ export const getArticles = async (page = 1, perPage = 10): Promise<ArticleListRe
   return response.data;
 };
 
-// 創建文章
-export const createArticle = async (articleData: ArticleData, files?: ArticleFiles): Promise<CreateArticleResponse> => {
-  const formData = new FormData();
-  
-  // 添加基本數據
-  formData.append('title', articleData.title);
-  formData.append('content', articleData.content);
-  formData.append('status', articleData.status);
-  
-  // 添加標籤 - 嘗試不同的格式
-  if (articleData.tags.length > 0) {
-    // 方法1：作為JSON字符串
-    formData.append('tags', JSON.stringify(articleData.tags));
-  }
-  
-  // 添加閱讀條件設定
-  if (articleData.reading_conditions) {
-    formData.append('reading_conditions', JSON.stringify(articleData.reading_conditions));
-  }
-  
-  // 添加文件
-  if (files?.coverImage) {
-    formData.append('cover_image', files.coverImage);
-  }
-  
-  if (files?.images) {
-    files.images.forEach((image, index) => {
-      formData.append(`image_${index}`, image);
-    });
-  }
-  
-  if (files?.videos) {
-    files.videos.forEach((video, index) => {
-      formData.append(`video_${index}`, video);
-    });
-  }
-  
-  // 調試信息
+// 創建文章（使用 pk 傳遞檔案）
+export const createArticle = async (articleData: ArticleData): Promise<CreateArticleResponse> => {
   console.log('Creating article with data:', {
     title: articleData.title,
     content: articleData.content.substring(0, 100) + '...',
     status: articleData.status,
     tags: articleData.tags,
     reading_conditions: articleData.reading_conditions,
-    hasCoverImage: !!files?.coverImage,
-    imagesCount: files?.images?.length || 0,
-    videosCount: files?.videos?.length || 0
+    cover_image_pk: articleData.cover_image_pk,
+    image_pks: articleData.image_pks,
+    video_pks: articleData.video_pks
   });
-  
-  // 調試 FormData 內容
-  console.log('FormData entries:');
-  for (let [key, value] of formData.entries()) {
-    console.log(`${key}:`, value instanceof File ? `File(${value.name}, ${value.size} bytes)` : value);
-  }
-  
+
   try {
-    const response = await api.post(API_ENDPOINTS.ARTICLE_CREATE, formData);
-    
+    const response = await api.post(API_ENDPOINTS.ARTICLE_CREATE, articleData);
+
     console.log('API響應成功:', response.data);
     return response.data;
   } catch (error: any) {
@@ -818,55 +874,34 @@ export const getArticleDetail = async (articleId: number): Promise<ArticleRespon
   return response.data;
 };
 
-// 更新文章
-export const updateArticle = async (articleId: number, articleData: ArticleData, files?: ArticleFiles): Promise<CreateArticleResponse> => {
-  const formData = new FormData();
-  
-  // 添加基本數據
-  formData.append('title', articleData.title);
-  formData.append('content', articleData.content);
-  formData.append('status', articleData.status);
-  
-  // 添加標籤 - 嘗試不同的格式
-  if (articleData.tags.length > 0) {
-    // 方法1：作為JSON字符串
-    formData.append('tags', JSON.stringify(articleData.tags));
-  }
-  
-  // 添加閱讀條件設定
-  if (articleData.reading_conditions) {
-    formData.append('reading_conditions', JSON.stringify(articleData.reading_conditions));
-  }
-  
-  // 添加文件
-  if (files?.coverImage) {
-    formData.append('cover_image', files.coverImage);
-  }
-  
-  if (files?.images) {
-    files.images.forEach((image, index) => {
-      formData.append(`image_${index}`, image);
+// 更新文章（使用 pk 傳遞檔案）
+export const updateArticle = async (articleId: number, articleData: ArticleData): Promise<CreateArticleResponse> => {
+  console.log('Updating article with data:', {
+    articleId,
+    title: articleData.title,
+    content: articleData.content.substring(0, 100) + '...',
+    status: articleData.status,
+    tags: articleData.tags,
+    reading_conditions: articleData.reading_conditions,
+    cover_image_pk: articleData.cover_image_pk,
+    image_pks: articleData.image_pks,
+    video_pks: articleData.video_pks
+  });
+
+  try {
+    const response = await api.post(API_ENDPOINTS.ARTICLE_UPDATE(articleId), articleData);
+
+    console.log('API響應成功:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('API調用失敗:', {
+      url: API_ENDPOINTS.ARTICLE_UPDATE(articleId),
+      error: error.response?.data || error.message,
+      status: error.response?.status,
+      headers: error.response?.headers
     });
+    throw error;
   }
-  
-  if (files?.videos) {
-    files.videos.forEach((video, index) => {
-      formData.append(`video_${index}`, video);
-    });
-  }
-  
-  // 添加現有文件ID（用於更新時保留指定文件）
-  if (files?.existingImageIds) {
-    formData.append('existing_image_ids', JSON.stringify(files.existingImageIds));
-  }
-  
-  if (files?.existingVideoIds) {
-    formData.append('existing_video_ids', JSON.stringify(files.existingVideoIds));
-  }
-  
-  const response = await api.post(API_ENDPOINTS.ARTICLE_UPDATE(articleId), formData);
-  
-  return response.data;
 };
 
 // 刪除文章
@@ -1400,6 +1435,7 @@ export interface ItemEventItem {
     checked_in_participants: number;
     total_revenue: number;
   };
+  tracking_script?: string;  // 追蹤腳本（如 Meta Pixel Code）
 }
 
 // ItemImage 介面（用於上傳其他圖片）
@@ -1477,8 +1513,12 @@ export interface ItemEventParticipant {
     field_id: number | string;
     field_label: string;
     field_type: string;
-    value: string;
+    value: string | number;
     display_value: string;
+    is_conditional?: boolean;
+    is_active?: boolean;
+    parent_field?: string;
+    parent_option?: string;
   }>;
   order_sn?: string;
   order_status?: string;
@@ -1488,6 +1528,7 @@ export interface ItemEventParticipant {
     sn: string;
     status: string;
     status_display: string;
+    referrer_member_card_id?: number | null;
     created_at: string;
   };
   event_order_detail?: {

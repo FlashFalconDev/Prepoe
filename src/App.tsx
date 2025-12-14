@@ -43,6 +43,15 @@ const ManageLayout = React.lazy(() => import('./components/ManageLayout'));
 const ManageDashboard = React.lazy(() => import('./pages/manage/ManageDashboard'));
 const ManageKeys = React.lazy(() => import('./pages/manage/ManageKeys'));
 
+// 懶載入會員商城頁面
+const ShopLayout = React.lazy(() => import('./components/ShopLayout'));
+const ShopHome = React.lazy(() => import('./pages/shop/ShopHome'));
+const ShopProducts = React.lazy(() => import('./pages/shop/ShopProducts'));
+const ShopFood = React.lazy(() => import('./pages/shop/ShopFood'));
+const ShopTickets = React.lazy(() => import('./pages/shop/ShopTickets'));
+const ShopMember = React.lazy(() => import('./pages/shop/ShopMember'));
+const MyTickets = React.lazy(() => import('./pages/shop/MyTickets'));
+
 // 懶載入商務客戶頁面
 const BusinessOverview = React.lazy(() => import('./pages/business/BusinessOverview'));
 const BusinessVisitors = React.lazy(() => import('./pages/business/BusinessVisitors'));
@@ -195,6 +204,26 @@ function App() {
                       </ManageLayout>
                     </Suspense>
                   </ProtectedRoute>
+                }
+              />
+
+              {/* 會員商城路由 - 公開頁面 */}
+              <Route
+                path="/shop/:clientSid/*"
+                element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ShopLayout>
+                      <Routes>
+                        <Route path="/" element={<ShopHome />} />
+                        <Route path="/products" element={<ShopProducts />} />
+                        <Route path="/food" element={<ShopFood />} />
+                        <Route path="/tickets" element={<ShopTickets />} />
+                        <Route path="/my-tickets" element={<MyTickets />} />
+                        <Route path="/member" element={<ShopMember />} />
+                        <Route path="/member/*" element={<ShopMember />} />
+                      </Routes>
+                    </ShopLayout>
+                  </Suspense>
                 }
               />
             </Routes>
