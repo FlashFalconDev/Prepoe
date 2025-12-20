@@ -18,6 +18,67 @@ import {
 import { AI_COLORS } from '../../constants/colors';
 import { sortFormFields, initializeFormData } from '../../utils/formUtils';
 
+/**
+ * 動態插入追蹤腳本的 Hook
+ * 支援 Meta Pixel、Google Analytics 等第三方追蹤代碼
+ * @param scriptContent - 包含 script 和 noscript 標籤的 HTML 字串
+ */
+const useTrackingScript = (scriptContent: string | undefined | null) => {
+  useEffect(() => {
+    if (!scriptContent || typeof scriptContent !== 'string' || scriptContent.trim() === '') {
+      return;
+    }
+
+    console.log('📊 正在載入追蹤腳本...');
+
+    // 創建一個臨時 DOM 來解析 HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = scriptContent;
+
+    // 儲存已插入的元素，用於清理
+    const insertedElements: Element[] = [];
+
+    // 處理 script 標籤
+    const scripts = tempDiv.querySelectorAll('script');
+    scripts.forEach((originalScript) => {
+      const newScript = document.createElement('script');
+      
+      // 複製所有屬性
+      Array.from(originalScript.attributes).forEach((attr) => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      
+      // 複製內聯腳本內容
+      if (originalScript.textContent) {
+        newScript.textContent = originalScript.textContent;
+      }
+      
+      document.head.appendChild(newScript);
+      insertedElements.push(newScript);
+      console.log('✅ 已插入追蹤腳本到 head');
+    });
+
+    // 處理 noscript 標籤（插入到 body）
+    const noscripts = tempDiv.querySelectorAll('noscript');
+    noscripts.forEach((noscript) => {
+      const clone = noscript.cloneNode(true) as Element;
+      document.body.appendChild(clone);
+      insertedElements.push(clone);
+      console.log('✅ 已插入 noscript 標籤到 body');
+    });
+
+    // 清理函數 - 組件卸載時移除腳本
+    return () => {
+      console.log('🧹 清理追蹤腳本...');
+      insertedElements.forEach((element) => {
+        if (element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+      });
+    };
+  }, [scriptContent]);
+};
+
 // 預設表單欄位（基本資訊）
 const DEFAULT_FORM_FIELDS: FormField[] = [
   {
@@ -99,6 +160,19 @@ const EventJoin: React.FC = () => {
   const [showRemarkSection, setShowRemarkSection] = useState(false);
   const [remarkNote, setRemarkNote] = useState('');
 
+  // 直接跳轉付款頁面（避免被 LINE 等 App 阻擋彈出視窗）
+  const redirectToPayment = (html: string) => {
+    document.open();
+    document.write(html);
+    document.close();
+
+    const form = document.querySelector('form');
+    if (form) {
+      console.log('✅ 找到支付表單，自動提交');
+      form.submit();
+    }
+  };
+
   // 圖片查看器
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [viewingImageUrl, setViewingImageUrl] = useState<string>('');
@@ -168,6 +242,9 @@ const EventJoin: React.FC = () => {
       loadEventInfo();
     }
   }, [sku, loadEventInfo]);
+
+  // 載入追蹤腳本（如 Meta Pixel Code）
+  useTrackingScript(eventInfo?.tracking_script);
 
   // 使用動態表單 Hooks
   const { errors, validateForm, clearFieldError } = useFormValidation();
@@ -458,25 +535,10 @@ const EventJoin: React.FC = () => {
         console.log('📋 訂單回應:', orderResponse);
 
         if (orderResponse.success) {
-          // 如果有支付 HTML，需要渲染並自動提交
+          // 如果有支付 HTML，直接跳轉付款頁面
           if (orderResponse.payment_html) {
-            console.log('💳 收到支付 HTML，準備跳轉到支付頁面');
-
-            // 創建一個隱藏的 div 來渲染支付表單
-            const paymentContainer = document.createElement('div');
-            paymentContainer.innerHTML = orderResponse.payment_html;
-            document.body.appendChild(paymentContainer);
-
-            // 尋找表單並自動提交
-            const form = paymentContainer.querySelector('form');
-            if (form) {
-              console.log('✅ 找到支付表單，自動提交中...');
-              form.submit();
-            } else {
-              console.error('❌ 未找到支付表單');
-              showError('支付表單載入失敗');
-              document.body.removeChild(paymentContainer);
-            }
+            console.log('💳 收到支付 HTML，準備跳轉付款頁面');
+            redirectToPayment(orderResponse.payment_html);
           } else {
             // 無需支付或現金支付
             showSuccess('報名成功！');
@@ -673,15 +735,16 @@ const EventJoin: React.FC = () => {
                     <i className="ri-user-line"></i>
                     <span>
                       {eventInfo.min_participants} - {eventInfo.max_participants} 人
-                      {eventInfo.current_participants_count !== undefined && (
-                        <span className={`ml-2 font-medium ${
-                          eventInfo.current_participants_count >= eventInfo.min_participants
-                            ? 'text-green-600'
-                            : 'text-orange-600'
-                        }`}>
-                          (已報名 {eventInfo.current_participants_count})
-                        </span>
-                      )}
+                      {eventInfo.current_participants_count !== undefined && (() => {
+                        const remaining = eventInfo.max_participants - eventInfo.current_participants_count;
+                        return remaining <= 10 && (
+                          <span className={`ml-2 font-medium ${
+                            remaining <= 3 ? 'text-red-600' : 'text-orange-600'
+                          }`}>
+                            (剩餘 {remaining} 名額)
+                          </span>
+                        );
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -1073,6 +1136,8 @@ const EventJoin: React.FC = () => {
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

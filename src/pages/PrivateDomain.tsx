@@ -1406,6 +1406,7 @@ const PrivateDomain: React.FC = () => {
                 <button onClick={() => { setShowExtendModal(false); setShowKeyCreate(true); }} className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">金鑰設定</button>
                 <button disabled className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-400 cursor-not-allowed">商城設定（即將推出）</button>
                 <button disabled className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-400 cursor-not-allowed">卡牌關聯（即將推出）</button>
+                <button onClick={() => { setShowExtendModal(false); navigate('/manage'); }} className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">電子票券</button>
               </div>
             </div>
           </div>

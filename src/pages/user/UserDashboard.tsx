@@ -336,15 +336,15 @@ const UserDashboard: React.FC = () => {
             />
             <FeatureCard
               icon={Ticket}
-              title="票劵中心"
+              title="票券中心"
               path="/client/tickets"
-              isComingSoon={true}
+              isComingSoon={false}
             />
             <FeatureCard
               icon={CreditCard}
               title="抽卡紀錄"
-              path="/client/cards"
-              isComingSoon={true}
+              path="/client/draw-history"
+              isComingSoon={false}
             />
             <FeatureCard
               icon={BookOpen}

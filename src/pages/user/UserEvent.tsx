@@ -247,15 +247,16 @@ const UserEvent: React.FC = () => {
                       <i className="ri-user-line" style={{ fontSize: '14px' }}></i>
                       <span>
                         {event.min_participants} - {event.max_participants} 人
-                        {event.current_participants_count !== undefined && (
-                          <span className={`ml-2 font-medium ${
-                            event.current_participants_count >= event.min_participants
-                              ? 'text-green-600'
-                              : 'text-orange-600'
-                          }`}>
-                            (已報名 {event.current_participants_count})
-                          </span>
-                        )}
+                        {event.current_participants_count !== undefined && (() => {
+                          const remaining = event.max_participants - event.current_participants_count;
+                          return remaining <= 10 && (
+                            <span className={`ml-2 font-medium ${
+                              remaining <= 3 ? 'text-red-600' : 'text-orange-600'
+                            }`}>
+                              (剩餘 {remaining} 名額)
+                            </span>
+                          );
+                        })()}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-500">

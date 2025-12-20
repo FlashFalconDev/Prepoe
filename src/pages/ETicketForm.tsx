@@ -5,6 +5,16 @@ import { useToast } from '../hooks/useToast';
 import { api, API_ENDPOINTS } from '../config/api';
 import { AI_COLORS } from '../constants/colors';
 
+// 牌陣資料型別
+interface Spread {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  deck_name?: string;
+  item_tags?: string[];
+}
+
 // 票券表單資料型別
 interface ETicketFormData {
   // 基本資訊
@@ -22,9 +32,10 @@ interface ETicketFormData {
   max_discount_amount?: number;
 
   // 點數卡專屬
-  topup_type?: 'points' | 'coins' | 'tokens' | 'coins_special';
+  topup_type?: 'points' | 'coins' | 'tokens' | 'coins_special' | 'spread_quota';
   topup_amount?: number;
   auto_use_setting?: 'manual' | 'on_receive' | 'on_transfer';
+  target_spread?: number | null; // 指定適用牌陣 ID
 
   // 兌換券專屬
   exchange_code?: string;
@@ -64,6 +75,10 @@ const ETicketForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // 牌陣列表狀態
+  const [spreads, setSpreads] = useState<Spread[]>([]);
+  const [spreadsLoading, setSpreadsLoading] = useState(false);
+
   // 標籤相關狀態
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
@@ -83,11 +98,32 @@ const ETicketForm: React.FC = () => {
     applicable_tags: [],
   });
 
+  // 載入公開牌陣列表
+  const loadSpreads = async () => {
+    try {
+      setSpreadsLoading(true);
+      const params: any = {};
+      if (isManageMode && clientSid) {
+        params.manage_client_sid = clientSid;
+      }
+      const response = await api.get(API_ENDPOINTS.CARDHACK_PUBLIC_SPREADS, { params });
+      if (response.data.success) {
+        setSpreads(response.data.data || []);
+      }
+    } catch (error: any) {
+      console.error('載入牌陣列表失敗:', error);
+    } finally {
+      setSpreadsLoading(false);
+    }
+  };
+
   // 載入票券資料（編輯模式）
   useEffect(() => {
     if (isEditMode) {
       loadETicket();
     }
+    // 載入牌陣列表（用於牌陣次數票券）
+    loadSpreads();
   }, [id]);
 
   const loadETicket = async () => {
@@ -496,13 +532,21 @@ const ETicketForm: React.FC = () => {
                     </label>
                     <select
                       value={formData.topup_type}
-                      onChange={(e) => handleChange('topup_type', e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleChange('topup_type', value);
+                        // 切換類型時清除不相關的欄位
+                        if (value !== 'spread_quota') {
+                          handleChange('target_spread', null);
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       required
                     >
                       <option value="">請選擇</option>
                       <option value="points">積分 (Points)</option>
                       <option value="coins">金幣 (Coins)</option>
+                      <option value="spread_quota">牌陣次數 (Spread Quota)</option>
                       {(clientSid === 'prepoe' || clientSid === 'aiya') && (
                         <>
                           <option value="tokens">代幣 (Tokens)</option>
@@ -514,7 +558,7 @@ const ETicketForm: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      補充數量 <span className="text-red-500">*</span>
+                      {formData.topup_type === 'spread_quota' ? '抽牌次數' : '補充數量'} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -522,26 +566,117 @@ const ETicketForm: React.FC = () => {
                       onChange={(e) => handleChange('topup_amount', parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       min="1"
-                      placeholder="100"
+                      placeholder={formData.topup_type === 'spread_quota' ? '1' : '100'}
                       required
                     />
+                    {formData.topup_type === 'spread_quota' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        使用此票券可獲得的抽牌次數
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    自動使用設定
-                  </label>
-                  <select
-                    value={formData.auto_use_setting}
-                    onChange={(e) => handleChange('auto_use_setting', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="manual">手動使用</option>
-                    <option value="on_receive">領取時自動使用</option>
-                    <option value="on_transfer">轉讓時自動使用</option>
-                  </select>
-                </div>
+                {/* 牌陣次數專屬設定 */}
+                {formData.topup_type === 'spread_quota' && (
+                  <div className="space-y-4 mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                      <span className="text-orange-600">🎴</span>
+                      牌陣適用範圍
+                    </h4>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        指定適用牌陣
+                      </label>
+                      <select
+                        value={formData.target_spread || ''}
+                        onChange={(e) => handleChange('target_spread', e.target.value ? parseInt(e.target.value) : null)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        disabled={spreadsLoading}
+                      >
+                        <option value="">不指定（依標籤或全部牌陣）</option>
+                        {spreads.map((spread) => (
+                          <option key={spread.id} value={spread.id}>
+                            {spread.name} {spread.deck_name ? `(${spread.deck_name})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formData.target_spread
+                          ? '僅適用於所選牌陣'
+                          : formData.applicable_tags && formData.applicable_tags.length > 0
+                            ? '將適用於標籤有交集的牌陣'
+                            : '將適用於所有公開牌陣'}
+                      </p>
+                    </div>
+
+                    {/* 適用標籤（牌陣次數專用） */}
+                    {!formData.target_spread && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          適用牌陣標籤
+                        </label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          設定哪些標籤的牌陣可以使用此票券，留空則所有公開牌陣皆可使用
+                        </p>
+
+                        {/* 已選標籤顯示 */}
+                        {formData.applicable_tags && formData.applicable_tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {formData.applicable_tags.map((tag, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 text-sm rounded-full"
+                              >
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => removeTag(tag)}
+                                  className="text-orange-500 hover:text-orange-700 transition-colors"
+                                  title="移除標籤"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* 標籤輸入區域 */}
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={tagInput}
+                            onChange={handleTagInputChange}
+                            onKeyDown={handleTagInputKeyDown}
+                            onBlur={handleTagInputBlur}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            placeholder={formData.applicable_tags && formData.applicable_tags.length === 0 ? "輸入標籤後按 Enter 新增" : "繼續新增標籤..."}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 非牌陣次數的自動使用設定 */}
+                {formData.topup_type !== 'spread_quota' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      自動使用設定
+                    </label>
+                    <select
+                      value={formData.auto_use_setting}
+                      onChange={(e) => handleChange('auto_use_setting', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="manual">手動使用</option>
+                      <option value="on_receive">領取時自動使用</option>
+                      <option value="on_transfer">轉讓時自動使用</option>
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Volume2, Camera, Sparkles, Play, Edit3, ArrowRight, CheckCircle } from 'lucide-react';
+import { FileText, Volume2, Camera, Sparkles, Play, Edit3, ArrowRight, CheckCircle, Layers } from 'lucide-react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { AI_COLORS } from '../constants/colors';
 import { useAuth } from '../contexts/AuthContext';
@@ -58,6 +58,16 @@ const AICreator: React.FC = () => {
       bgColor: 'bg-emerald-100',
       features: ['智能內容建議', '圖片影片上傳', '標籤自動推薦', '即時預覽'],
       path: '/provider/creator/article'
+    },
+    {
+      id: 'cardhack',
+      title: '卡牌創作',
+      description: '創建專屬塔羅牌卡組，自訂牌義與牌陣，打造個人占卜系統',
+      icon: Layers,
+      color: 'text-pink-600',
+      bgColor: 'bg-pink-100',
+      features: ['自訂牌組管理', '多張牌卡創建', '牌義解釋編輯', '牌陣設計'],
+      path: '/provider/creator/cardhack'
     }
   ];
 

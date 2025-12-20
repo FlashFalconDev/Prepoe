@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Search, Clock, MapPin, Plus, Minus, ShoppingBag, X, UtensilsCrossed, CreditCard } from 'lucide-react';
 import { api, API_ENDPOINTS, createOrder } from '../../config/api';
 import { useToast } from '../../hooks/useToast';
@@ -54,14 +54,10 @@ interface CartItem extends FoodItem {
 
 const ShopFood: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
 
   // 從 URL 路徑解析 clientSid: /shop/:clientSid/food
   const clientSid = location.pathname.split('/')[2];
-  
-  // 記錄進入頁面時的路徑，用於關閉支付彈窗後返回
-  const returnPath = location.pathname;
 
   const [menuItems, setMenuItems] = useState<FoodItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -75,33 +71,18 @@ const ShopFood: React.FC = () => {
   const [purchasing, setPurchasing] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<string>('');
 
-  // 支付彈窗狀態
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentHtml, setPaymentHtml] = useState<string>('');
-  const paymentIframeRef = useRef<HTMLIFrameElement>(null);
+  // 直接跳轉付款頁面（避免被 LINE 等 App 阻擋彈出視窗）
+  const redirectToPayment = (html: string) => {
+    document.open();
+    document.write(html);
+    document.close();
 
-  // 當支付 HTML 更新時，寫入 iframe 並提交表單
-  useEffect(() => {
-    if (showPaymentModal && paymentHtml && paymentIframeRef.current) {
-      const iframe = paymentIframeRef.current;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-      
-      if (iframeDoc) {
-        iframeDoc.open();
-        iframeDoc.write(paymentHtml);
-        iframeDoc.close();
-        
-        // 尋找表單並自動提交
-        const form = iframeDoc.querySelector('form');
-        if (form) {
-          console.log('✅ 在彈窗中找到支付表單，自動提交中...');
-          form.submit();
-        } else {
-          console.error('❌ 未找到支付表單');
-        }
-      }
+    const form = document.querySelector('form');
+    if (form) {
+      console.log('✅ 找到支付表單，自動提交');
+      form.submit();
     }
-  }, [showPaymentModal, paymentHtml]);
+  };
 
   // 防止重複請求
   const hasLoadedRef = useRef(false);
@@ -236,14 +217,11 @@ const ShopFood: React.FC = () => {
       const response = await createOrder(orderData);
 
       if (response.success) {
-        // 如果有支付 HTML，在彈窗中開啟
+        // 如果有支付 HTML，直接跳轉付款頁面
         if (response.payment_html) {
-          console.log('💳 收到支付 HTML，準備在彈窗中開啟支付頁面');
-          
-          // 關閉購物車 Modal，儲存支付 HTML 並顯示支付彈窗
+          console.log('💳 收到支付 HTML，準備跳轉付款頁面');
           setShowCartModal(false);
-          setPaymentHtml(response.payment_html);
-          setShowPaymentModal(true);
+          redirectToPayment(response.payment_html);
         } else {
           showSuccess(response.message || '訂單已送出！');
           setCart([]);
@@ -567,51 +545,6 @@ const ShopFood: React.FC = () => {
         </div>
       )}
 
-      {/* 支付彈窗 - 藍新支付 */}
-      {showPaymentModal && paymentHtml && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div
-            className="bg-white rounded-xl w-full max-w-2xl h-[90vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 標題列 */}
-            <div className="bg-orange-500 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white">
-                <CreditCard size={20} />
-                <h3 className="text-lg font-semibold">安全付款</h3>
-              </div>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setPaymentHtml('');
-                  // 關閉彈窗後返回當前頁面（重新載入以更新狀態）
-                  navigate(returnPath);
-                  window.location.reload();
-                }}
-                className="p-1 text-white hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* 付款頁面 iframe */}
-            <div className="flex-1 overflow-hidden">
-              <iframe
-                ref={paymentIframeRef}
-                className="w-full h-full border-0"
-                title="付款頁面"
-              />
-            </div>
-
-            {/* 底部提示 */}
-            <div className="p-3 bg-gray-50 border-t text-center">
-              <p className="text-sm text-gray-500">
-                付款過程由藍新金流安全處理
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

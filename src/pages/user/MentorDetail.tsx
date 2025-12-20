@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { Share2, UserPlus, Film, FileText, Calendar, Clock, User, Eye, Heart } from 'lucide-react';
 import { AI_COLORS } from '../../constants/colors';
 import { useBusinessCardData } from '../../hooks/useBusinessCardData';
@@ -16,6 +16,7 @@ const tabs = [
 const MentorDetail: React.FC = () => {
   const { state } = useLocation();
   const { slug } = useParams();
+  const navigate = useNavigate();
   const [active, setActive] = React.useState<(typeof tabs)[number]['key']>('about');
   const [mediaArticles, setMediaArticles] = React.useState<Article[]>([]);
   const [mediaLoading, setMediaLoading] = React.useState(false);
@@ -208,7 +209,11 @@ const MentorDetail: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {mediaArticles.map((a) => (
-                      <div key={a.id} className="bg-white rounded-xl border border-gray-100 p-4">
+                      <div
+                        key={a.id}
+                        className="bg-white rounded-xl border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => navigate(`/client/articles/${a.slug}`)}
+                      >
                         <div className="w-full h-40 bg-gray-200 rounded mb-3 overflow-hidden flex items-center justify-center">
                           {a.cover_image_url ? (
                             <img src={a.cover_image_url} alt={a.title} className="w-full h-full object-cover" />
@@ -253,7 +258,10 @@ const MentorDetail: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {eventItems.map((event: any) => (
-                      <div key={event.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                      <div
+                        key={event.id}
+                        className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"
+                      >
                         {/* 主圖 */}
                         {event.main_image && (
                           <div className="relative h-48 bg-gray-100">
@@ -284,7 +292,19 @@ const MentorDetail: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2">
                               <i className="ri-user-line" style={{ fontSize: '14px' }}></i>
-                              <span>{event.min_participants} - {event.max_participants} 人</span>
+                              <span>
+                                {event.min_participants} - {event.max_participants} 人
+                                {event.current_participants_count !== undefined && (() => {
+                                  const remaining = event.max_participants - event.current_participants_count;
+                                  return remaining <= 10 && (
+                                    <span className={`ml-2 font-medium ${
+                                      remaining <= 3 ? 'text-red-600' : 'text-orange-600'
+                                    }`}>
+                                      (剩餘 {remaining} 名額)
+                                    </span>
+                                  );
+                                })()}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <i className="ri-money-dollar-circle-line" style={{ fontSize: '14px' }}></i>
@@ -305,8 +325,15 @@ const MentorDetail: React.FC = () => {
                             </div>
                           )}
                           <div className="flex gap-2 mt-auto">
-                            <button disabled={event.event_status !== 'registration_open'} className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm`}>
-                              {event.event_status === 'registration_open' ? '立即報名' : '報名截止'}
+                            <button
+                              onClick={() => {
+                                if (event.sku) {
+                                  navigate(`/client/event/join/${event.sku}`);
+                                }
+                              }}
+                              className={`flex-1 px-4 py-2 ${AI_COLORS.button} rounded-xl transition-colors text-sm`}
+                            >
+                              查看詳情
                             </button>
                           </div>
                         </div>

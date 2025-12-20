@@ -392,6 +392,17 @@ export const API_ENDPOINTS = {
   CARDHACK_DRAW_SESSIONS: `${API_BASE}/cardhack/api/draw-sessions/`,
   CARDHACK_DRAW_SESSION_CREATE: `${API_BASE}/cardhack/api/draw-sessions/create/`,
   CARDHACK_DRAW_SESSION_DETAIL: (sessionId: number) => `${API_BASE}/cardhack/api/draw-sessions/${sessionId}/`,
+  CARDHACK_DRAW_CREATE: (spreadCode: string) => `${API_BASE}/cardhack/api/draw/create/${spreadCode}/`,
+  CARDHACK_DRAW_QUOTA: (spreadCode: string) => `${API_BASE}/cardhack/api/draw/quota/${spreadCode}/`,
+
+  // 會員抽卡紀錄 API
+  CARDHACK_DRAW_HISTORY: `${API_BASE}/cardhack/api/draw/`,
+
+  // 公開牌陣列表 API (用於票券關聯)
+  CARDHACK_PUBLIC_SPREADS: `${API_BASE}/cardhack/api/spreads/public/`,
+
+  // ==================== FlexWeb API ====================
+  FLEXWEB_BY_CODE: (code: string) => `${API_BASE}/flexweb/api/flexweb/${code}/`,
 
   // ==================== ItemEticket 電子票券系統 API ====================
 
@@ -467,22 +478,43 @@ const api = axios.create({
  * - 嘗試刷新頁面重新獲取 token
  * - 檢查後端 CSRF 設置是否正確
  */
+/**
+ * 從當前 URL 路徑提取 client_sid
+ * 支援的路徑格式：
+ * - /card/:clientSid/...
+ * - /card_test/:clientSid/...
+ * - /flex/:clientSid/...
+ * - /shop/:clientSid/...
+ */
+const getClientSidFromUrl = (): string | null => {
+  const pathname = window.location.pathname;
+  // 匹配 /card/, /card_test/, /flex/, /shop/ 後面的第一個路徑段作為 client_sid
+  const match = pathname.match(/^\/(card|card_test|flex|shop)\/([^/]+)/);
+  if (match && match[2]) {
+    return match[2];
+  }
+  return null;
+};
+
 // 添加請求攔截器來自動添加CSRF token
 api.interceptors.request.use(
   async (config) => {
-    // 對於GET請求，添加client_sid參數（如果請求中沒有指定的話）
-    if (config.method?.toLowerCase() === 'get') {
-      const clientSid = import.meta.env.VITE_CLIENT_SID;
-      // 只有在請求沒有自帶 client_sid 時才使用環境變數的預設值
-      if (clientSid && !config.params?.client_sid) {
-        config.params = {
-          ...config.params,
-          client_sid: clientSid
-        };
-        console.log('添加client_sid到GET請求:', clientSid, 'URL:', config.url);
-      }
+    // 統一獲取 client_sid：優先從 URL 路徑提取，其次使用 localStorage，最後使用環境變數預設值
+    const urlClientSid = getClientSidFromUrl();
+    const storedClientSid = localStorage.getItem('client_sid');
+    const envClientSid = import.meta.env.VITE_CLIENT_SID;
+    const clientSid = urlClientSid || storedClientSid || envClientSid;
+    const clientSidSource = urlClientSid ? 'URL路徑' : storedClientSid ? 'localStorage' : '環境變數';
+
+    // 對於所有請求，添加 client_sid 參數（如果請求中沒有指定的話）
+    if (clientSid && !config.params?.client_sid) {
+      config.params = {
+        ...config.params,
+        client_sid: clientSid
+      };
+      console.log('添加client_sid到請求:', clientSid, '(來源:', clientSidSource, ') Method:', config.method?.toUpperCase(), 'URL:', config.url);
     }
-    
+
     // 對於POST、PUT、DELETE等需要CSRF token的請求
     if (['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase() || '')) {
       // 嘗試從cookie獲取CSRF token

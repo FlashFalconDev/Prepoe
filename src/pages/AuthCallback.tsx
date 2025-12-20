@@ -35,16 +35,31 @@ const AuthCallback: React.FC = () => {
             login(result.user);
           }
 
-          // 登入成功後，調用 /api/protected/ 來獲取 session 中的 next 路徑
-          const protectedResponse = await getProtectedData();
-          const redirectPath = protectedResponse.data.session_info?.session_data?.next || '/';
+          // 登入成功後，優先從 localStorage 取得重定向路徑
+          // 如果沒有，再嘗試從後端 session 取得
+          let redirectPath = localStorage.getItem('login_redirect_path');
+          console.log('=== AuthCallback Debug ===');
+          console.log('LocalStorage redirect path:', redirectPath);
+
+          if (!redirectPath) {
+            // 如果 localStorage 沒有，嘗試從後端 session 取得
+            const protectedResponse = await getProtectedData();
+            console.log('Protected Response:', protectedResponse.data);
+            console.log('Session Info:', protectedResponse.data.session_info);
+            console.log('Session Data:', protectedResponse.data.session_info?.session_data);
+            console.log('Next Path from session:', protectedResponse.data.session_info?.session_data?.next);
+            redirectPath = protectedResponse.data.session_info?.session_data?.next || '/';
+          } else {
+            // 使用完後立即清除，避免影響下次登入
+            localStorage.removeItem('login_redirect_path');
+          }
 
           // 清除 URL 上的 code/state，避免刷新重複觸發
           const basename = getBasename();
           window.history.replaceState({}, document.title, basename);
 
           // 標準化重定向路徑
-          const normalizedPath = normalizePath(redirectPath);
+          const normalizedPath = normalizePath(redirectPath || '/');
 
           setTimeout(() => {
             navigate(normalizedPath, { replace: true });

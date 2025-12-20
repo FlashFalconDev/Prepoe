@@ -12,6 +12,7 @@ interface KeysManagerModalProps {
   managedClientName?: string;
   managedClientSid?: string;
   userRole?: string; // 用戶在該公司的角色
+  initialTab?: TabKey; // 初始分頁，預設為 'list'
 }
 
 type TabKey = 'list' | 'create';
@@ -26,7 +27,7 @@ const defaultPayload: KeyBatchCreatePayload = {
   code_len: 12,
 };
 
-const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, managedClientId, managedClientName, managedClientSid, userRole }) => {
+const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, managedClientId, managedClientName, managedClientSid, userRole, initialTab = 'list' }) => {
   const { user } = useAuth();
   const [active, setActive] = useState<TabKey>('list');
   
@@ -54,12 +55,12 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
 
   useEffect(() => {
     if (isOpen) {
-      setActive('list');
+      setActive(initialTab);
       setPayload({ ...defaultPayload, managed_client_id: managedClientId });
       setBatches([]);
       setError(null);
     }
-  }, [isOpen, managedClientId]);
+  }, [isOpen, managedClientId, initialTab]);
 
   const fetchBatches = async () => {
     try {

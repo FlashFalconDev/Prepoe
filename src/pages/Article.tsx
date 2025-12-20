@@ -1080,13 +1080,37 @@ const ContentCreator: React.FC = () => {
 
                 {/* Content Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">文章內容</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">文章內容</label>
+                    <div className={`text-sm ${
+                      content.length > 3000 ? 'text-red-600 font-semibold' :
+                      content.length > 2700 ? 'text-orange-600 font-medium' :
+                      'text-gray-500'
+                    }`}>
+                      {content.length} / 3000 字
+                    </div>
+                  </div>
                   <textarea
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 min-h-[200px] focus:ring-2 focus:ring-ai-500 focus:border-transparent resize-none"
+                    className={`w-full border rounded-xl px-4 py-3 min-h-[200px] focus:ring-2 focus:ring-ai-500 focus:border-transparent resize-none ${
+                      content.length > 3000 ? 'border-red-500' : 'border-gray-200'
+                    }`}
                     placeholder="開始撰寫您的文章內容..."
                     value={content}
                     onChange={e => setContent(e.target.value)}
+                    maxLength={3000}
                   />
+                  {content.length > 2700 && content.length <= 3000 && (
+                    <p className="mt-1 text-sm text-orange-600">
+                      <i className="ri-alert-line mr-1"></i>
+                      即將達到字數上限
+                    </p>
+                  )}
+                  {content.length >= 3000 && (
+                    <p className="mt-1 text-sm text-red-600">
+                      <i className="ri-error-warning-line mr-1"></i>
+                      已達到字數上限 (3000字)
+                    </p>
+                  )}
                 </div>
 
                 {/* Tags */}

@@ -19,9 +19,13 @@ interface ETicketItem {
   ticket_type_display: string;
   discount_type?: 'percentage' | 'fixed';
   discount_value?: string;
-  topup_type?: 'points' | 'coins' | 'tokens' | 'bonus' | 'coins_special';
+  topup_type?: 'points' | 'coins' | 'tokens' | 'bonus' | 'coins_special' | 'spread_quota';
+  topup_type_display?: string;
   topup_amount?: number;
   auto_use_setting?: 'manual' | 'on_receive' | 'on_transfer';
+  target_spread?: number | null;
+  target_spread_name?: string;
+  applicable_tags?: string[];
   min_purchase_amount?: string;
   max_discount_amount?: string;
   validity_type: 'dynamic' | 'fixed';
@@ -154,7 +158,11 @@ const ETickets: React.FC = () => {
   }, [filterType, filterActive]);
 
   // 票券類型標籤顏色
-  const getTicketTypeColor = (type: string) => {
+  const getTicketTypeColor = (type: string, topupType?: string) => {
+    // 牌陣次數票券使用橘色
+    if (type === 'topup' && topupType === 'spread_quota') {
+      return 'bg-orange-100 text-orange-700';
+    }
     switch (type) {
       case 'discount':
         return 'bg-blue-100 text-blue-700';
@@ -169,6 +177,14 @@ const ETickets: React.FC = () => {
       default:
         return 'bg-gray-100 text-gray-700';
     }
+  };
+
+  // 取得票券類型顯示文字
+  const getTicketTypeDisplay = (eticket: ETicketItem) => {
+    if (eticket.ticket_type === 'topup' && eticket.topup_type === 'spread_quota') {
+      return '牌陣次數';
+    }
+    return eticket.ticket_type_display;
   };
 
   return (
@@ -294,8 +310,8 @@ const ETickets: React.FC = () => {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 mb-1">{eticket.name}</h3>
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getTicketTypeColor(eticket.ticket_type)}`}>
-                      {eticket.ticket_type_display}
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getTicketTypeColor(eticket.ticket_type, eticket.topup_type)}`}>
+                      {getTicketTypeDisplay(eticket)}
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -316,6 +332,33 @@ const ETickets: React.FC = () => {
 
                 {/* 票券資訊 */}
                 <p className="text-gray-600 text-sm mb-3 line-clamp-2">{eticket.description}</p>
+
+                {/* 牌陣次數票券額外資訊 */}
+                {eticket.ticket_type === 'topup' && eticket.topup_type === 'spread_quota' && (
+                  <div className="mb-3 p-2 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-orange-600">🎴</span>
+                      <span className="text-gray-700">
+                        {eticket.topup_amount} 次抽牌
+                      </span>
+                    </div>
+                    {eticket.target_spread_name && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        適用牌陣：{eticket.target_spread_name}
+                      </p>
+                    )}
+                    {!eticket.target_spread && eticket.applicable_tags && eticket.applicable_tags.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        適用標籤：{eticket.applicable_tags.join(', ')}
+                      </p>
+                    )}
+                    {!eticket.target_spread && (!eticket.applicable_tags || eticket.applicable_tags.length === 0) && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        適用：所有公開牌陣
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* 統計資訊 */}
                 <div className="grid grid-cols-3 gap-2 mb-3 pb-3 border-b border-gray-200">

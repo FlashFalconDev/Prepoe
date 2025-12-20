@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   FileText, 
   Image, 
@@ -98,6 +98,7 @@ const ArticleCard: React.FC<{
 const UserArticles: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   // 若在個人頁（/client/provider/:slug），從路徑擷取 slug
   const providerSlugFromPath = React.useMemo(() => {
     const path = location.pathname || '';
@@ -292,7 +293,7 @@ const UserArticles: React.FC = () => {
                           <ArticleCard
                             key={article.id}
                             article={article}
-                            onClick={() => console.log('查看文章:', article.title)}
+                            onClick={() => navigate(`/client/articles/${article.slug}`)}
                             isMobile={isMobile}
                           />
                         ))}
@@ -303,7 +304,7 @@ const UserArticles: React.FC = () => {
                           <ArticleCard
                             key={article.id}
                             article={article}
-                            onClick={() => console.log('查看文章:', article.title)}
+                            onClick={() => navigate(`/client/articles/${article.slug}`)}
                             isMobile={isMobile}
                           />
                         ))}

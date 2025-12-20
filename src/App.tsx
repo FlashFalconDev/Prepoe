@@ -23,6 +23,9 @@ const VideoCreation = React.lazy(() => import('./pages/VideoCreation'));
 const Audio = React.lazy(() => import('./pages/Audio'));
 const Article = React.lazy(() => import('./pages/Article'));
 const CardHack = React.lazy(() => import('./pages/CardHack'));
+const CardDraw = React.lazy(() => import('./pages/CardDraw'));
+const CardDrawTest = React.lazy(() => import('./pages/CardDrawTest'));
+const FlexView = React.lazy(() => import('./pages/FlexView'));
 const Chat = React.lazy(() => import('./pages/Chat'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const ActivitySettings = React.lazy(() => import('./pages/ActivitySettings'));
@@ -68,6 +71,8 @@ const ArticleDetail = React.lazy(() => import('./pages/user/ArticleDetail'));
 const EventJoin = React.lazy(() => import('./pages/user/EventJoin'));
 const MentorDetail = React.lazy(() => import('./pages/user/MentorDetail'));
 const UserViews = React.lazy(() => import('./pages/user/UserViews'));
+const DrawHistory = React.lazy(() => import('./pages/user/DrawHistory'));
+const TicketCenter = React.lazy(() => import('./pages/user/TicketCenter'));
 
 // 載入中組件
 const LoadingSpinner = () => (
@@ -150,6 +155,8 @@ function App() {
                         <Route path="/profile" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
                         <Route path="/event/join/:sku" element={<EventJoin />} />
                         <Route path="/views" element={<UserViews />} />
+                        <Route path="/draw-history" element={<ProtectedRoute><DrawHistory /></ProtectedRoute>} />
+                        <Route path="/tickets" element={<ProtectedRoute><TicketCenter /></ProtectedRoute>} />
                       </Routes>
                     </Suspense>
                   </Layout>
@@ -204,6 +211,36 @@ function App() {
                       </ManageLayout>
                     </Suspense>
                   </ProtectedRoute>
+                }
+              />
+
+              {/* 抽卡牌路由 - 公開頁面（使用 quota API） */}
+              <Route
+                path="/card/:clientSid/:spreadCode"
+                element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CardDraw />
+                  </Suspense>
+                }
+              />
+
+              {/* 抽卡牌測試路由 - 公開頁面（使用舊版 API） */}
+              <Route
+                path="/card_test/:clientSid/:spreadCode"
+                element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CardDrawTest />
+                  </Suspense>
+                }
+              />
+
+              {/* Flex Message 展示路由 - 公開頁面 */}
+              <Route
+                path="/flex/:clientSid/:code"
+                element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <FlexView />
+                  </Suspense>
                 }
               />
 

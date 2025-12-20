@@ -1,6 +1,6 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { CreditCard, Bot, Video, MessageSquare, Settings, LogOut, User, FileText, Sparkles, Calendar, Briefcase, Users, UserCog, BarChart3 } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { CreditCard, Bot, Video, MessageSquare, Settings, LogOut, LogIn, User, FileText, Sparkles, Calendar, Briefcase, Users, UserCog, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { AI_COLORS } from '../constants/colors';
 
@@ -10,7 +10,12 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
+
+  // 判斷是否在 /client 路徑且未登入
+  const isClientPath = location.pathname.startsWith('/client');
+  const isUnauthenticatedClient = isClientPath && !isAuthenticated;
 
   // 截斷使用者名稱顯示
   const truncateUsername = (username?: string) => {
@@ -106,18 +111,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2">
-              <User size={16} className="text-gray-500" />
-              <span className="text-sm text-gray-700" title={user?.username}>
-                {truncateUsername(user?.username)}
-              </span>
-            </div>
+            {isAuthenticated && (
+              <div className="flex items-center space-x-2">
+                <User size={16} className="text-gray-500" />
+                <span className="text-sm text-gray-700" title={user?.username}>
+                  {truncateUsername(user?.username)}
+                </span>
+              </div>
+            )}
             <button
-              onClick={logout}
-              className="p-2 text-gray-500 hover:text-red-600 transition-colors"
-              title="登出"
+              onClick={isUnauthenticatedClient ? () => navigate('/login', { state: { from: location } }) : logout}
+              className={`p-2 transition-colors ${
+                isUnauthenticatedClient
+                  ? 'text-gray-500 hover:text-orange-600'
+                  : 'text-gray-500 hover:text-red-600'
+              }`}
+              title={isUnauthenticatedClient ? '登入' : '登出'}
             >
-              <LogOut size={16} />
+              {isUnauthenticatedClient ? <LogIn size={16} /> : <LogOut size={16} />}
             </button>
           </div>
         </div>
@@ -128,6 +139,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex flex-col space-y-2 px-4 flex-1">
           {navItems.map(({ path, icon: Icon, label }) => {
             const isActive = location.pathname === path;
+            // 檢查是否需要登入才能訪問 (對話視窗和會員專區)
+            const requiresAuth = isUnauthenticatedClient && (path === '/client/chat' || path === '/client/profile');
+
+            if (requiresAuth) {
+              // 需要登入的項目 - 點擊後導向登入頁面，並傳遞目標路徑
+              return (
+                <button
+                  key={path}
+                  onClick={() => navigate('/login', { state: { from: { pathname: path, search: '' } } })}
+                  className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900 opacity-60 hover:opacity-100 border-0 bg-transparent w-full text-left"
+                >
+                  <Icon size={20} />
+                  <span className="font-medium flex-1">{label}</span>
+                </button>
+              );
+            }
+
             return (
               <Link
                 key={path}
@@ -145,21 +173,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           })}
         </div>
         
-        {/* 登出按鈕 - 位於左側選單底部 */}
+        {/* 登出/登入按鈕 - 位於左側選單底部 */}
         <div className="px-4 pb-6">
           <div className="border-t border-gray-200 pt-4">
-            <div className="flex items-center space-x-3 px-4 py-2 text-gray-600 mb-3">
-              <User size={20} />
-              <span className="font-medium text-sm truncate" title={user?.username}>
-                {truncateUsername(user?.username)}
-              </span>
-            </div>
+            {isAuthenticated && (
+              <div className="flex items-center space-x-3 px-4 py-2 text-gray-600 mb-3">
+                <User size={20} />
+                <span className="font-medium text-sm truncate" title={user?.username}>
+                  {truncateUsername(user?.username)}
+                </span>
+              </div>
+            )}
             <button
-              onClick={logout}
-              className="flex items-center space-x-3 px-4 py-3 w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+              onClick={isUnauthenticatedClient ? () => navigate('/login', { state: { from: location } }) : logout}
+              className={`flex items-center space-x-3 px-4 py-3 w-full text-left rounded-lg transition-colors ${
+                isUnauthenticatedClient
+                  ? 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
+                  : 'text-gray-600 hover:bg-red-50 hover:text-red-600'
+              }`}
             >
-              <LogOut size={20} />
-              <span className="font-medium">登出</span>
+              {isUnauthenticatedClient ? <LogIn size={20} /> : <LogOut size={20} />}
+              <span className="font-medium">{isUnauthenticatedClient ? '登入' : '登出'}</span>
             </button>
           </div>
         </div>
@@ -175,6 +209,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex justify-around items-center h-16 px-4">
           {navItems.map(({ path, icon: Icon, label }) => {
             const isActive = location.pathname === path;
+            // 檢查是否需要登入才能訪問 (對話視窗和會員專區)
+            const requiresAuth = isUnauthenticatedClient && (path === '/client/chat' || path === '/client/profile');
+
+            if (requiresAuth) {
+              // 需要登入的項目 - 點擊後導向登入頁面，並傳遞目標路徑
+              return (
+                <button
+                  key={path}
+                  onClick={() => navigate('/login', { state: { from: { pathname: path, search: '' } } })}
+                  className="flex flex-col items-center justify-center min-w-0 flex-1 py-2 px-1 transition-colors text-gray-500 hover:text-gray-700 opacity-60 hover:opacity-100 border-0 bg-transparent"
+                >
+                  <Icon size={24} className="mb-1" />
+                  <span className="text-xs font-medium text-center leading-tight">
+                    {label}
+                  </span>
+                </button>
+              );
+            }
+
             return (
               <Link
                 key={path}

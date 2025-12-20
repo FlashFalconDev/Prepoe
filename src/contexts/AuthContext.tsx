@@ -97,9 +97,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const response = await getProtectedData(referrer || undefined, currentPath);
       if (response.status === 200) {
-        // 如果API返回用戶資訊，使用API的資料
-        if (response.data.user) {
-          // 直接使用 API 返回的用戶資料,保持原始結構
+        // 檢查 is_authenticated 狀態
+        const isAuthenticated = response.data.user?.is_authenticated;
+
+        // 如果API返回 is_authenticated: false，清除用戶資料
+        if (isAuthenticated === false) {
+          console.log('⚠️ API 回傳未登入狀態，清除用戶資料');
+          setUser(null);
+          setFeatureFlag(undefined);
+          localStorage.removeItem('user');
+          hasCheckedAuthRef.current = true;
+        } else if (response.data.user) {
+          // 如果有用戶資訊且已認證，使用API的資料
           const userData = response.data.user;
           setUser(userData);
           // 設置 feature_flag

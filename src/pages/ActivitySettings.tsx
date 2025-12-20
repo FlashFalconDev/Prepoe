@@ -89,7 +89,10 @@ const ActivitySettings: React.FC = () => {
     main_image_file: undefined as File | undefined,
     is_public_event: true,
     waiting_payment_minutes: 180,
-    terms_of_event: ''
+    terms_of_event: '',
+    paid_notification_content: '',
+    tracking_script: '',
+    tracking_script_purchase: ''
   });
 
   // 圖片上傳相關狀態
@@ -99,7 +102,11 @@ const ActivitySettings: React.FC = () => {
   // 標籤相關狀態
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [showAdvancedSection, setShowAdvancedSection] = useState(false);
   const [showTermsSection, setShowTermsSection] = useState(false);
+  const [showPaidNotificationSection, setShowPaidNotificationSection] = useState(false);
+  const [showTrackingScriptSection, setShowTrackingScriptSection] = useState(false);
+  const [showTrackingScriptPurchaseSection, setShowTrackingScriptPurchaseSection] = useState(false);
 
   // 早鳥價設定彈窗狀態
   const [showBasePriceEarlyBirdModal, setShowBasePriceEarlyBirdModal] = useState(false);
@@ -109,7 +116,8 @@ const ActivitySettings: React.FC = () => {
     endDate: ''
   });
 
-
+  // 防止重複請求
+  const isInitializedRef = useRef(false);
 
   // 載入活動列表
   const loadEvents = async () => {
@@ -150,16 +158,20 @@ const ActivitySettings: React.FC = () => {
 
   // 初始化載入
   useEffect(() => {
+    // 防止 React 18 Strict Mode 重複執行
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
     console.log('🎯 ActivitySettings useEffect 執行');
-    
+
     // 載入初始資料
     const initializeData = async () => {
       try {
         setLoading(true);
-        
+
         // 載入活動資料
         const eventsResponse = await getItemEventItems();
-        
+
         // 處理活動資料
         if (eventsResponse.success) {
           const eventsData = eventsResponse.data.events;
@@ -173,16 +185,16 @@ const ActivitySettings: React.FC = () => {
           console.warn('載入活動失敗:', eventsResponse.message);
           setEvents([]);
         }
-        
-             } catch (error: any) {
-         console.error('初始化資料載入失敗:', error);
-         showError('載入失敗', error.message || '無法載入活動資料');
-         setEvents([]);
-       } finally {
-         setLoading(false);
-       }
+
+      } catch (error: any) {
+        console.error('初始化資料載入失敗:', error);
+        showError('載入失敗', error.message || '無法載入活動資料');
+        setEvents([]);
+      } finally {
+        setLoading(false);
+      }
     };
-    
+
     initializeData();
   }, []);
 
@@ -192,6 +204,33 @@ const ActivitySettings: React.FC = () => {
   const handleEventSubmit = async () => {
     // 防止重複提交
     if (isSubmitting) {
+      return;
+    }
+
+    // 日期驗證
+    if (eventForm.start_time && eventForm.end_time) {
+      const startDate = new Date(eventForm.start_time);
+      const endDate = new Date(eventForm.end_time);
+
+      if (startDate >= endDate) {
+        showError('日期錯誤', '結束時間必須晚於開始時間');
+        return;
+      }
+    }
+
+    // 必填欄位驗證
+    if (!eventForm.name || !eventForm.name.trim()) {
+      showError('表單錯誤', '請填寫活動名稱');
+      return;
+    }
+
+    if (!eventForm.start_time) {
+      showError('表單錯誤', '請選擇開始時間');
+      return;
+    }
+
+    if (!eventForm.end_time) {
+      showError('表單錯誤', '請選擇結束時間');
       return;
     }
 
@@ -483,7 +522,10 @@ const ActivitySettings: React.FC = () => {
         main_image_file: undefined,
         is_public_event: true,
         waiting_payment_minutes: 180,
-        terms_of_event: ''
+        terms_of_event: '',
+        paid_notification_content: '',
+        tracking_script: '',
+        tracking_script_purchase: ''
       });
       setAdditionalImages([]); // 重置圖片列表
       setTagInput('');
@@ -900,7 +942,10 @@ const ActivitySettings: React.FC = () => {
                       main_image_file: undefined,
                       is_public_event: true,
                       waiting_payment_minutes: 180,
-                      terms_of_event: ''
+                      terms_of_event: '',
+                      paid_notification_content: '',
+                      tracking_script: '',
+                      tracking_script_purchase: ''
                     });
                     setTagInput('');
                     setShowTagSuggestions(false);
@@ -955,7 +1000,10 @@ const ActivitySettings: React.FC = () => {
                       main_image_file: undefined,
                       is_public_event: true,
                       waiting_payment_minutes: 180,
-                      terms_of_event: ''
+                      terms_of_event: '',
+                      paid_notification_content: '',
+                      tracking_script: '',
+                      tracking_script_purchase: ''
                     });
                     setTagInput('');
                     setShowTagSuggestions(false);
@@ -1049,27 +1097,30 @@ const ActivitySettings: React.FC = () => {
                                  }))
                                })) || [];
 
-                               setEventForm({
-                                  name: event.name,
-                                  description: event.description,
-                                  base_price: event.base_price,
-                                  earlyBirdConfig: formattedEarlyBird,
-                                  earlyBird: event.earlyBird,
-                                  start_time: formatDateTimeForInput(event.start_time),
-                                  end_time: formatDateTimeForInput(event.end_time),
-                                  location: event.location,
-                                  min_participants: event.min_participants,
-                                  max_participants: event.max_participants,
-                                  max_participants_per_user: event.max_participants_per_user,
-                                  use_check_in: event.use_check_in,
-                                  event_status: event.event_status,
-                                  form_fields: processedFormFields,
-                                  tags: event.item_tags?.map(tag => tag.name) || [],
-                                  main_image_file: undefined,
-                                  is_public_event: (event as any).is_public_event !== undefined ? (event as any).is_public_event : true,
-                                  waiting_payment_minutes: (event as any).waiting_payment_minutes || 180,
-                                  terms_of_event: (event as any).terms_of_event || ''
-                                });
+                              setEventForm({
+                                 name: event.name,
+                                 description: event.description,
+                                 base_price: event.base_price,
+                                 earlyBirdConfig: formattedEarlyBird,
+                                 earlyBird: event.earlyBird,
+                                 start_time: formatDateTimeForInput(event.start_time),
+                                 end_time: formatDateTimeForInput(event.end_time),
+                                 location: event.location,
+                                 min_participants: event.min_participants,
+                                 max_participants: event.max_participants,
+                                 max_participants_per_user: event.max_participants_per_user,
+                                 use_check_in: event.use_check_in,
+                                 event_status: event.event_status,
+                                 form_fields: processedFormFields,
+                                 tags: event.item_tags?.map(tag => tag.name) || [],
+                                 main_image_file: undefined,
+                                 is_public_event: (event as any).is_public_event !== undefined ? (event as any).is_public_event : true,
+                                 waiting_payment_minutes: (event as any).waiting_payment_minutes || 180,
+                                 terms_of_event: (event as any).terms_of_event || '',
+                                 paid_notification_content: (event as any).paid_notification_content || '',
+                                 tracking_script: (event as any).tracking_script || '',
+                                 tracking_script_purchase: (event as any).tracking_script_purchase || ''
+                               });
                                // 載入圖片 (第一張即為主圖)
                                if (event.images && event.images.length > 0) {
                                  const allImages: ItemImageUpload[] = event.images.map((img, index) => ({
@@ -1430,20 +1481,34 @@ const ActivitySettings: React.FC = () => {
                         type="datetime-local"
                         value={eventForm.start_time}
                         onChange={(e) => setEventForm({ ...eventForm, start_time: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                          eventForm.start_time && eventForm.end_time && new Date(eventForm.start_time) >= new Date(eventForm.end_time)
+                            ? 'border-red-500'
+                            : 'border-gray-300'
+                        }`}
                         required
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">結束時間</label>
                       <input
                         type="datetime-local"
                         value={eventForm.end_time}
                         onChange={(e) => setEventForm({ ...eventForm, end_time: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                          eventForm.start_time && eventForm.end_time && new Date(eventForm.start_time) >= new Date(eventForm.end_time)
+                            ? 'border-red-500'
+                            : 'border-gray-300'
+                        }`}
                         required
                       />
+                      {eventForm.start_time && eventForm.end_time && new Date(eventForm.start_time) >= new Date(eventForm.end_time) && (
+                        <p className="mt-1 text-sm text-red-600">
+                          <i className="ri-error-warning-line mr-1"></i>
+                          結束時間必須晚於開始時間
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -1635,47 +1700,196 @@ const ActivitySettings: React.FC = () => {
                     />
                   </div>
 
-                  {/* 活動條款 */}
+                  {/* 增強功能 - 可展開區塊 */}
                   <div className="pt-4 border-t">
-                    {/* 活動條款 - 可展開的文字區塊 */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          活動條款
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setShowTermsSection(!showTermsSection)}
-                          className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
-                        >
-                          {showTermsSection ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedSection(!showAdvancedSection)}
+                      className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <i className="ri-settings-4-line text-purple-600"></i>
+                        <span className="font-medium text-gray-700">增強功能</span>
+                        <span className="text-xs text-gray-500">（活動條款、通知信、追蹤像素）</span>
+                      </div>
+                      <i className={`ri-arrow-${showAdvancedSection ? 'up' : 'down'}-s-line text-gray-500`}></i>
+                    </button>
+
+                    {showAdvancedSection && (
+                      <div className="mt-4 space-y-4 pl-2 border-l-2 border-purple-200">
+                        {/* 活動條款 */}
+                        <div className="pl-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              活動條款
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowTermsSection(!showTermsSection)}
+                              className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                            >
+                              {showTermsSection ? (
+                                <>
+                                  <i className="ri-arrow-up-s-line"></i>
+                                  隱藏
+                                </>
+                              ) : (
+                                <>
+                                  <i className="ri-arrow-down-s-line"></i>
+                                  展開填寫
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {showTermsSection && (
+                            <textarea
+                              value={eventForm.terms_of_event}
+                              onChange={(e) => setEventForm({ ...eventForm, terms_of_event: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                              placeholder="輸入活動條款內容（選填）"
+                              rows={6}
+                            />
+                          )}
+                          {!showTermsSection && eventForm.terms_of_event && (
+                            <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                              已填寫條款內容（{eventForm.terms_of_event.length} 字）
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 付款後通知信 */}
+                        <div className="pl-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              付款後通知信
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowPaidNotificationSection(!showPaidNotificationSection)}
+                              className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                            >
+                              {showPaidNotificationSection ? (
+                                <>
+                                  <i className="ri-arrow-up-s-line"></i>
+                                  隱藏
+                                </>
+                              ) : (
+                                <>
+                                  <i className="ri-arrow-down-s-line"></i>
+                                  展開填寫
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {showPaidNotificationSection && (
+                            <textarea
+                              value={eventForm.paid_notification_content}
+                              onChange={(e) => setEventForm({ ...eventForm, paid_notification_content: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent whitespace-pre-wrap"
+                              placeholder="輸入付款成功後要寄給參與者的通知信內容（選填）&#10;例如：活動注意事項、集合地點、攜帶物品等資訊"
+                              rows={8}
+                            />
+                          )}
+                          {!showPaidNotificationSection && eventForm.paid_notification_content && (
+                            <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                              已填寫通知信內容（{eventForm.paid_notification_content.length} 字）
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 訂購頁面追蹤像素 */}
+                        <div className="pl-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              <i className="ri-code-s-slash-line mr-1 text-blue-600"></i>
+                              訂購頁面追蹤像素
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowTrackingScriptSection(!showTrackingScriptSection)}
+                              className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                            >
+                              {showTrackingScriptSection ? (
+                                <>
+                                  <i className="ri-arrow-up-s-line"></i>
+                                  隱藏
+                                </>
+                              ) : (
+                                <>
+                                  <i className="ri-arrow-down-s-line"></i>
+                                  展開填寫
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {showTrackingScriptSection && (
                             <>
-                              <i className="ri-arrow-up-s-line"></i>
-                              隱藏
-                            </>
-                          ) : (
-                            <>
-                              <i className="ri-arrow-down-s-line"></i>
-                              展開填寫
+                              <textarea
+                                value={eventForm.tracking_script}
+                                onChange={(e) => setEventForm({ ...eventForm, tracking_script: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm"
+                                placeholder="貼上訂購頁面的追蹤像素程式碼（選填）&#10;例如：Meta Pixel、Google Analytics 等追蹤程式碼"
+                                rows={8}
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                此程式碼會在用戶進入訂購頁面時執行，可用於追蹤 AddToCart、InitiateCheckout 等事件
+                              </p>
                             </>
                           )}
-                        </button>
-                      </div>
-                      {showTermsSection && (
-                        <textarea
-                          value={eventForm.terms_of_event}
-                          onChange={(e) => setEventForm({ ...eventForm, terms_of_event: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                          placeholder="輸入活動條款內容（選填）"
-                          rows={6}
-                        />
-                      )}
-                      {!showTermsSection && eventForm.terms_of_event && (
-                        <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
-                          已填寫條款內容（{eventForm.terms_of_event.length} 字）
+                          {!showTrackingScriptSection && eventForm.tracking_script && (
+                            <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                              已設定追蹤像素（{eventForm.tracking_script.length} 字元）
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+
+                        {/* 付款完成追蹤像素 */}
+                        <div className="pl-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              <i className="ri-code-s-slash-line mr-1 text-green-600"></i>
+                              付款完成追蹤像素
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowTrackingScriptPurchaseSection(!showTrackingScriptPurchaseSection)}
+                              className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                            >
+                              {showTrackingScriptPurchaseSection ? (
+                                <>
+                                  <i className="ri-arrow-up-s-line"></i>
+                                  隱藏
+                                </>
+                              ) : (
+                                <>
+                                  <i className="ri-arrow-down-s-line"></i>
+                                  展開填寫
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {showTrackingScriptPurchaseSection && (
+                            <>
+                              <textarea
+                                value={eventForm.tracking_script_purchase}
+                                onChange={(e) => setEventForm({ ...eventForm, tracking_script_purchase: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm"
+                                placeholder="貼上付款完成頁面的追蹤像素程式碼（選填）&#10;例如：Meta Pixel Purchase 事件追蹤程式碼"
+                                rows={8}
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                此程式碼會在用戶完成付款後執行，可用於追蹤 Purchase 等轉換事件
+                              </p>
+                            </>
+                          )}
+                          {!showTrackingScriptPurchaseSection && eventForm.tracking_script_purchase && (
+                            <div className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                              已設定追蹤像素（{eventForm.tracking_script_purchase.length} 字元）
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-3 pt-4">

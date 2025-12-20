@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Search, UserCheck, UserX, Download } from 'lucide-react';
 import { getItemEventParticipants, checkInItemEventParticipant, type EventParticipantsResponse, type ItemEventParticipant } from '../config/api';
 import { useToast } from '../hooks/useToast';
@@ -18,22 +18,31 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({ isOpen,
   const [checkInFilter, setCheckInFilter] = useState<'all' | 'checked_in' | 'not_checked_in'>('all');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(20);
   const [selectedParticipant, setSelectedParticipant] = useState<ItemEventParticipant | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const { showError, showSuccess } = useToast();
 
-  useEffect(() => {
-    if (isOpen && eventId) {
-      loadParticipants();
-    }
-  }, [isOpen, eventId, currentPage, checkInFilter, orderStatusFilter, searchQuery]);
+  // 防止重複請求
+  const isLoadingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const loadParticipants = async () => {
+  const loadParticipants = useCallback(async () => {
+    // 如果正在載入中，跳過
+    if (isLoadingRef.current) return;
+
+    // 取消前一個請求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
+      isLoadingRef.current = true;
       setLoading(true);
       const params: any = {
         page: currentPage,
-        page_size: 20
+        page_size: pageSize
       };
 
       if (checkInFilter !== 'all') params.check_in_status = checkInFilter;
@@ -41,15 +50,30 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({ isOpen,
       if (searchQuery) params.search = searchQuery;
 
       const response = await getItemEventParticipants(eventId, params);
-      console.log('參與者 API 回應:', response);
       setData(response);
     } catch (error: any) {
+      // 忽略取消的請求錯誤
+      if (error.name === 'AbortError' || error.name === 'CanceledError') return;
       console.error('載入參與者錯誤:', error);
       showError('載入失敗', error.message || '載入參與者列表時發生錯誤');
     } finally {
+      isLoadingRef.current = false;
       setLoading(false);
     }
-  };
+  }, [eventId, currentPage, pageSize, checkInFilter, orderStatusFilter, searchQuery, showError]);
+
+  useEffect(() => {
+    if (isOpen && eventId) {
+      loadParticipants();
+    }
+
+    // 清理函數：組件卸載或依賴變更時取消請求
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [isOpen, eventId, currentPage, pageSize, checkInFilter, orderStatusFilter, searchQuery, loadParticipants]);
 
   const handleCheckIn = async (participantId: number) => {
     try {
@@ -95,22 +119,92 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({ isOpen,
   const exportToCSV = () => {
     if (!data?.data?.participants || !data.data.participants.length) return;
 
-    const headers = ['姓名', '電子郵件', '電話', '綁定碼', '報到狀態', '報到時間', '訂單編號', '訂單狀態', '建立時間'];
-    const rows = data.data.participants.map(p => [
-      p.name,
-      p.email,
-      p.phone,
-      p.binding_code,
-      p.is_checked_in ? '已報到' : '未報到',
-      p.check_in_time ? formatDateTime(p.check_in_time) : '',
-      p.order_info?.sn || '',
-      p.order_info?.status_display || '',
-      formatDateTime(p.created_at)
-    ]);
+    // 收集所有動態表單欄位（從所有參與者中提取唯一的欄位標籤）
+    const dynamicFieldLabels: string[] = [];
+    const dynamicFieldIds: (string | number)[] = [];
+
+    data.data.participants.forEach(p => {
+      if (p.form_data) {
+        p.form_data.forEach(field => {
+          // 排除 is_primary_contact，因為已經有獨立欄位
+          if (field.field_id !== 'is_primary_contact' && !dynamicFieldIds.includes(field.field_id)) {
+            dynamicFieldIds.push(field.field_id);
+            dynamicFieldLabels.push(field.field_label);
+          }
+        });
+      }
+    });
+
+    // 建立標題列：基本資訊 + 動態表單欄位 + 訂單資訊 + 報到狀態
+    const headers = [
+      '姓名',
+      '電子郵件',
+      '電話',
+      '綁定碼',
+      '主要聯絡人',
+      ...dynamicFieldLabels,
+      '訂單編號',
+      '訂單狀態',
+      '推薦者ID',
+      '單價',
+      '小計',
+      '參與人數',
+      '備註',
+      '報到狀態',
+      '報到時間',
+      '報名時間'
+    ];
+
+    const rows = data.data.participants.map(p => {
+      // 取得動態欄位的值
+      const dynamicValues = dynamicFieldIds.map(fieldId => {
+        const field = p.form_data?.find(f => f.field_id === fieldId);
+        return field?.display_value || '';
+      });
+
+      // 取得主要聯絡人狀態
+      const isPrimaryContact = p.form_data?.find(f => f.field_id === 'is_primary_contact');
+      const isPrimaryContactValue = isPrimaryContact?.value === 1 ? '是' : '否';
+
+      // 取得訂單詳細資訊
+      const orderDetail = p.event_order_detail;
+      const unitPrice = orderDetail?.unit_price ? `$${orderDetail.unit_price.toLocaleString()}` : '';
+      const subtotal = orderDetail?.subtotal ? `$${orderDetail.subtotal.toLocaleString()}` : '';
+      const participantCount = orderDetail?.participant_count?.toString() || '';
+      const remark = orderDetail?.options_json?.remark || '';
+      const referrerId = p.order_info?.referrer_member_card_id?.toString() || '';
+
+      return [
+        p.name,
+        p.email,
+        p.phone,
+        p.binding_code,
+        isPrimaryContactValue,
+        ...dynamicValues,
+        p.order_info?.sn || '',
+        p.order_info?.status_display || '',
+        referrerId,
+        unitPrice,
+        subtotal,
+        participantCount,
+        remark,
+        p.is_checked_in ? '已報到' : '未報到',
+        p.check_in_time ? formatDateTime(p.check_in_time) : '',
+        formatDateTime(p.created_at)
+      ];
+    });
+
+    // 處理 CSV 特殊字元（逗號、換行、引號）
+    const escapeCSV = (cell: string) => {
+      if (cell.includes(',') || cell.includes('\n') || cell.includes('"')) {
+        return `"${cell.replace(/"/g, '""')}"`;
+      }
+      return `"${cell}"`;
+    };
 
     const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      headers.map(h => escapeCSV(h)).join(','),
+      ...rows.map(row => row.map(cell => escapeCSV(String(cell))).join(','))
     ].join('\n');
 
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -217,6 +311,22 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({ isOpen,
                   <option value="all">全部訂單狀態</option>
                   <option value="paid">已付款</option>
                   <option value="pending">待付款</option>
+                </select>
+
+                {/* 每頁顯示數量 */}
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    setPageSize(value);
+                    setCurrentPage(1);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                >
+                  <option value={20}>每頁 20 筆</option>
+                  <option value={50}>每頁 50 筆</option>
+                  <option value={100}>每頁 100 筆</option>
+                  <option value={9999}>顯示全部</option>
                 </select>
 
                 {/* 匯出按鈕 */}
@@ -458,6 +568,12 @@ const EventParticipantsModal: React.FC<EventParticipantsModalProps> = ({ isOpen,
                         {selectedParticipant.order_info.status_display}
                       </span>
                     </div>
+                    {selectedParticipant.order_info.referrer_member_card_id && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">推薦者ID:</span>
+                        <span className="font-medium">{selectedParticipant.order_info.referrer_member_card_id}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">建立時間:</span>
                       <span className="font-medium">{formatDateTime(selectedParticipant.order_info.created_at)}</span>

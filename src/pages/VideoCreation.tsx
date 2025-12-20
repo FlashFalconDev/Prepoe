@@ -3,7 +3,7 @@ import {
   Video, Plus, Play, Download, Share2, ArrowLeft, ArrowRight, User, Sparkles, 
   Image as ImageIcon, Mic, Upload, Square, Pause, Volume2, VolumeX, Target, 
   FileText, Lightbulb, CheckCircle, XCircle, Loader2, AlertTriangle, Users, 
-  BarChart3, Palette, FileVideo, FileAudio, Settings, Zap, Clock, Camera
+  BarChart3, Palette, FileVideo, FileAudio, Settings, Zap, Clock, Camera, Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, API_ENDPOINTS, getSoundCloneList, createVideoGenerationWithImage, getVideoGenerationWithImageList, getAIModules, AIModuleConfig } from '../config/api';
@@ -1940,6 +1940,21 @@ const VideoCreation: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* 返回按鈕 */}
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            <span>返回</span>
+          </button>
+          <span className="flex items-center gap-1.5 text-sm text-gray-500">
+            <Info size={16} />
+            AI 生成之內容不受著作權保護
+          </span>
+        </div>
+
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between">

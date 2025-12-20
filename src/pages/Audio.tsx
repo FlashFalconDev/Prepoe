@@ -3,7 +3,7 @@ import {
   Volume2, Plus, Minus, Play, Download, Share2, ArrowLeft, ArrowRight, User, Sparkles,
   Mic, Upload, Square, Pause, VolumeX, Target,
   FileText, Lightbulb, CheckCircle, XCircle, Loader2, AlertTriangle, Users,
-  BarChart3, Palette, FileAudio, Settings, Zap, Clock, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Trash2
+  BarChart3, Palette, FileAudio, Settings, Zap, Clock, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Trash2, Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, API_ENDPOINTS, createSoundClone, generateAIAudio, getSoundCloneList, getSoundCloneDetail, getAIModules, AIModuleConfig } from '../config/api';
@@ -2314,13 +2314,19 @@ const AIAudio: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 py-12">
           {/* 返回按鈕 */}
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-8 transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span>返回</span>
-          </button>
+          <div className="flex items-center justify-between mb-8">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              <ArrowLeft size={20} />
+              <span>返回</span>
+            </button>
+            <span className="flex items-center gap-1.5 text-sm text-gray-500">
+              <Info size={16} />
+              AI 生成之內容不受著作權保護
+            </span>
+          </div>
 
           {/* 模式選擇卡片 */}
           <div className="grid grid-cols-2 gap-4 md:gap-8">

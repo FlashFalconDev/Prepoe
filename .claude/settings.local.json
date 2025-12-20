@@ -33,7 +33,15 @@
       "Bash(nul)",
       "Bash(dir /s /b c:reactPrepoesrccomponents*Modal*.tsx)",
       "Bash(npx tsc --build --clean)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(npx tsc:*)",
+      "Bash(cat:*)",
+      "Bash(copy:*)",
+      "Bash(npx vite build:*)",
+      "Bash(node -e:*)",
+      "Bash(dir:*)",
+      "Bash(cmd /c copy \"c:\\react\\Prepoe\\src\\pages\\CardDraw.tsx\" \"c:\\react\\Prepoe\\src\\pages\\CardDrawTest.tsx\")"
     ],
     "deny": [],
     "ask": []
