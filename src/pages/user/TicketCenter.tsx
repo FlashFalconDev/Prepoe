@@ -1174,8 +1174,8 @@ const TicketCenter: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'shop' | 'my'>('shop');
 
-  // 從 user 的 session 獲取 client_sid
-  const clientSid = user?.session_info?.session_data?.client_sid || '';
+  // 從 localStorage 或環境變數獲取 client_sid
+  const clientSid = localStorage.getItem('client_sid') || import.meta.env.VITE_CLIENT_SID || '';
 
   return (
     <div className="min-h-screen bg-gray-50">

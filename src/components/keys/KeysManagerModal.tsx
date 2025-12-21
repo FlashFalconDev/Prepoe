@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AI_COLORS } from '../../constants/colors';
-import { KeyBatchCreatePayload, keysCreateBatch, keysListBatches, keysGetBatchDetail } from '../../config/api';
+import { KeyBatchCreatePayload, keysCreateBatch, keysListBatches, keysGetBatchDetail, keysGetEticketItems, EticketItemOption, EticketReward } from '../../config/api';
 import { Download, Key, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -43,6 +43,11 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
   const [payload, setPayload] = useState<KeyBatchCreatePayload>({ ...defaultPayload, managed_client_id: managedClientId });
   const [submitting, setSubmitting] = useState(false);
 
+  // 票券獎勵相關 state
+  const [eticketItems, setEticketItems] = useState<EticketItemOption[]>([]);
+  const [eticketLoading, setEticketLoading] = useState(false);
+  const [selectedEtickets, setSelectedEtickets] = useState<EticketReward[]>([]);
+
   // GetOne modal state
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyData, setKeyData] = useState<any>(null);
@@ -59,8 +64,32 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
       setPayload({ ...defaultPayload, managed_client_id: managedClientId });
       setBatches([]);
       setError(null);
+      setSelectedEtickets([]);
     }
   }, [isOpen, managedClientId, initialTab]);
+
+  // 載入可選票券商品列表
+  const fetchEticketItems = async () => {
+    if (!managedClientId) return;
+    try {
+      setEticketLoading(true);
+      const resp = await keysGetEticketItems({ managed_client_id: managedClientId });
+      const items = resp?.data?.eticket_items || [];
+      setEticketItems(Array.isArray(items) ? items : []);
+    } catch (e) {
+      console.error('載入票券商品失敗:', e);
+      setEticketItems([]);
+    } finally {
+      setEticketLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && active === 'create' && managedClientId) {
+      fetchEticketItems();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, active, managedClientId]);
 
   const fetchBatches = async () => {
     try {
@@ -94,23 +123,46 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
       delete copy.count;
       delete copy.code_len;
     }
+    // 加入票券獎勵到預覽
+    if (selectedEtickets.length > 0) {
+      copy.eticket_rewards = selectedEtickets;
+    }
     return copy;
-  }, [payload, isUnique]);
+  }, [payload, isUnique, selectedEtickets]);
+
+  // 票券選擇處理函數
+  const handleEticketToggle = (itemId: number) => {
+    setSelectedEtickets(prev => {
+      const existing = prev.find(e => e.eticket_item_id === itemId);
+      if (existing) {
+        return prev.filter(e => e.eticket_item_id !== itemId);
+      } else {
+        return [...prev, { eticket_item_id: itemId, quantity: 1 }];
+      }
+    });
+  };
+
+  const handleEticketQuantityChange = (itemId: number, quantity: number) => {
+    setSelectedEtickets(prev => prev.map(e =>
+      e.eticket_item_id === itemId ? { ...e, quantity: Math.max(1, quantity) } : e
+    ));
+  };
 
   const validate = (): string | null => {
     if (!payload.title || payload.title.trim().length === 0) return '請輸入批次標題';
     if (!payload.managed_client_id) return '缺少 managed_client_id';
-    
-    // 檢查至少要有一項贈與內容（points、coins、tokens 或 role）
+
+    // 檢查至少要有一項贈與內容（points、coins、tokens、role 或票券獎勵）
     const hasPoints = (payload.points || 0) > 0;
     const hasCoins = (payload.coins || 0) > 0;
     const hasTokens = (payload.tokens || 0) > 0;
     const hasRole = payload.role && payload.role.trim().length > 0;
-    
-    if (!hasPoints && !hasCoins && !hasTokens && !hasRole) {
-      return '請至少設定一項贈與內容（Points、Coins、Tokens 或角色）';
+    const hasEtickets = selectedEtickets.length > 0;
+
+    if (!hasPoints && !hasCoins && !hasTokens && !hasRole && !hasEtickets) {
+      return '請至少設定一項贈與內容（Points、Coins、Tokens、角色或票券獎勵）';
     }
-    
+
     if (isUnique) {
       if (!payload.count || payload.count <= 0) return '請輸入有效的數量';
       if (!payload.code_len || payload.code_len < 12 || payload.code_len > 18) return '金鑰長度需介於 12~18';
@@ -130,9 +182,15 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
     }
     try {
       setSubmitting(true);
-      const result = await keysCreateBatch(payload);
+      // 組合 payload，包含票券獎勵
+      const finalPayload: KeyBatchCreatePayload = {
+        ...payload,
+        eticket_rewards: selectedEtickets.length > 0 ? selectedEtickets : undefined,
+      };
+      const result = await keysCreateBatch(finalPayload);
       if (result?.success) {
         setActive('list');
+        setSelectedEtickets([]); // 重置票券選擇
         fetchBatches();
       } else {
         alert(result?.error || '建立失敗');
@@ -265,6 +323,14 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
                     if (v > 0) parts.push(`${typeLabel[k] || k}: ${v}`);
                   });
                   if (roleLabel) parts.push(`role: ${roleLabel}`);
+                  // 票券獎勵摘要
+                  const eticketRewards: any[] = b.eticket_rewards || [];
+                  if (eticketRewards.length > 0) {
+                    const ticketSummary = eticketRewards.map((r: any) =>
+                      `${r.eticket_item_name || '票券'}×${r.quantity || 1}`
+                    ).join('、');
+                    parts.push(`票券: ${ticketSummary}`);
+                  }
                   const grantSummary = parts.join('、');
                   const handleDownload = async () => {
                     try {
@@ -564,6 +630,72 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
                 </div>
               )}
 
+              {/* 電子票券獎勵 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  電子票券獎勵
+                  {eticketLoading && <span className="ml-2 text-gray-400 text-xs">載入中...</span>}
+                </label>
+                {eticketItems.length === 0 && !eticketLoading ? (
+                  <div className="text-sm text-gray-500 py-2">目前沒有可選的票券商品</div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {eticketItems.map((item) => {
+                      const selected = selectedEtickets.find(e => e.eticket_item_id === item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center justify-between p-2 rounded-lg border transition-colors cursor-pointer ${
+                            selected ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={() => handleEticketToggle(item.id)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={!!selected}
+                                onChange={() => {}}
+                                className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
+                              />
+                              <span className="font-medium text-gray-900 truncate">{item.name}</span>
+                              <span className={`px-1.5 py-0.5 text-xs rounded ${
+                                item.ticket_type === 'discount' ? 'bg-green-100 text-green-700' :
+                                item.ticket_type === 'exchange' ? 'bg-blue-100 text-blue-700' :
+                                'bg-purple-100 text-purple-700'
+                              }`}>
+                                {item.ticket_type_display}
+                              </span>
+                            </div>
+                            {item.description && (
+                              <p className="text-xs text-gray-500 mt-0.5 ml-6 truncate">{item.description}</p>
+                            )}
+                          </div>
+                          {selected && (
+                            <div className="flex items-center gap-2 ml-3" onClick={(e) => e.stopPropagation()}>
+                              <span className="text-xs text-gray-500">數量:</span>
+                              <input
+                                type="number"
+                                value={selected.quantity || 1}
+                                onChange={(e) => handleEticketQuantityChange(item.id, Number(e.target.value))}
+                                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                min={1}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {selectedEtickets.length > 0 && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    已選擇 {selectedEtickets.length} 種票券，
+                    共 {selectedEtickets.reduce((sum, e) => sum + (e.quantity || 1), 0)} 張
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3 mt-6">
                 <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
                 <button onClick={handleCreate} disabled={submitting} className={`flex-1 px-4 py-2 rounded-lg ${AI_COLORS.button} disabled:bg-gray-300 disabled:cursor-not-allowed`}>
@@ -594,6 +726,17 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
                 {isAdmin && (payload.tokens || 0) > 0 && <div>贈送 Tokens：<span className="font-semibold">{payload.tokens}</span></div>}
                 <div>有效天數：{payload.days || 0} 天</div>
                 <div>角色設定：{payload.role || '—'}</div>
+                {selectedEtickets.length > 0 && (
+                  <div>
+                    <span>票券獎勵：</span>
+                    <span className="font-semibold">
+                      {selectedEtickets.map(e => {
+                        const item = eticketItems.find(i => i.id === e.eticket_item_id);
+                        return `${item?.name || '未知票券'}×${e.quantity || 1}`;
+                      }).join('、')}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4">

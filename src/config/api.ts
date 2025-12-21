@@ -343,6 +343,7 @@ export const API_ENDPOINTS = {
   KEYS_REDEEM: `${API_BASE}/keys/api/redeem/`,
   KEYS_REDEMPTIONS: `${API_BASE}/keys/api/redemptions/`,
   KEYS_MARK_USED: (batchId: number) => `${API_BASE}/keys/api/batches/${batchId}/mark-used/`,
+  KEYS_ETICKET_ITEMS: `${API_BASE}/keys/api/eticket-items/`,
   
   // ==================== AI 模組配置 API ====================
   AI_MODULES: `${API_BASE}/ai/api/get_AI_modules/`,
@@ -3081,6 +3082,25 @@ export const getMemberComplete = async (): Promise<MemberCompleteResponse> => {
 };
 
 // ==================== Keys 金鑰模組 - 型別與 API 方法 ====================
+// 票券獎勵設定型別
+export interface EticketReward {
+  eticket_item_id: number;
+  quantity?: number; // 預設 1
+}
+
+// 票券商品項目型別（API 回傳）
+export interface EticketItemOption {
+  id: number;
+  name: string;
+  ticket_type: 'discount' | 'exchange' | 'topup';
+  ticket_type_display: string;
+  base_price: number;
+  available_stock: string | number;
+  validity_type: 'dynamic' | 'fixed';
+  valid_days: number | null;
+  description: string;
+}
+
 export interface KeyBatchCreatePayload {
   mode: 'unique' | 'event';
   title: string;
@@ -3102,6 +3122,7 @@ export interface KeyBatchCreatePayload {
   per_member?: number;
   allowed_channels?: string[];
   audience_filter_json?: Record<string, any>;
+  eticket_rewards?: EticketReward[]; // 電子票券獎勵設定
 }
 
 export const keysCreateBatch = async (payload: KeyBatchCreatePayload) => {
@@ -3142,6 +3163,12 @@ export const keysMyRedemptions = async (params?: { page?: number; page_size?: nu
 
 export const keysMarkUsed = async (batchId: number) => {
   const response = await api.post(API_ENDPOINTS.KEYS_MARK_USED(batchId));
+  return response.data;
+};
+
+// 取得可選票券商品列表（用於金鑰建立時選擇票券獎勵）
+export const keysGetEticketItems = async (params: { managed_client_id: number }) => {
+  const response = await api.get(API_ENDPOINTS.KEYS_ETICKET_ITEMS, { params });
   return response.data;
 };
 

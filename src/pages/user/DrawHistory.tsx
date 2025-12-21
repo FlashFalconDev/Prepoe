@@ -6,8 +6,10 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Compass
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { api, API_ENDPOINTS } from '../../config/api';
 import { AI_COLORS } from '../../constants/colors';
 import { useToast } from '../../hooks/useToast';
@@ -19,6 +21,7 @@ interface DrawCard {
   position_title: string;
   position_desc: string;
   interpretation: string;
+  explores?: string;
 }
 
 interface DrawSession {
@@ -46,6 +49,13 @@ interface DrawHistoryResponse {
 // 單張卡片組件
 const CardItem: React.FC<{ card: DrawCard; index: number }> = ({ card, index }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const navigate = useNavigate();
+
+  const handleExplore = () => {
+    if (card.explores) {
+      navigate(card.explores);
+    }
+  };
 
   return (
     <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
@@ -79,14 +89,28 @@ const CardItem: React.FC<{ card: DrawCard; index: number }> = ({ card, index }) 
             {card.position_desc}
           </p>
 
-          {/* 解讀按鈕 */}
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className={`flex items-center gap-1 text-xs ${AI_COLORS.text} hover:opacity-80 transition-opacity`}
-          >
-            {isExpanded ? '收起解讀' : '查看解讀'}
-            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          {/* 按鈕區域 */}
+          <div className="flex items-center gap-3">
+            {/* 解讀按鈕 */}
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className={`flex items-center gap-1 text-xs ${AI_COLORS.text} hover:opacity-80 transition-opacity`}
+            >
+              {isExpanded ? '收起解讀' : '查看解讀'}
+              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+
+            {/* 探索按鈕 */}
+            {card.explores && (
+              <button
+                onClick={handleExplore}
+                className={`flex items-center gap-1 text-xs ${AI_COLORS.button} px-2 py-1 rounded-full transition-colors`}
+              >
+                <Compass size={14} />
+                探索
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
