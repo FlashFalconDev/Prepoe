@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Sparkles, X, LogIn } from 'lucide-react';
 import { api, API_ENDPOINTS } from '../config/api';
-import { DrawResult, getTemplate, DEFAULT_TEMPLATE, FlexCarouselView } from '../components/cardDraw';
+import { DrawResult, getTemplate, DEFAULT_TEMPLATE, FlexCarouselView, getTemplateFromResult, getCardDrawStyle, getDetailStyle, PostActionResult, FormData } from '../components/cardDraw';
+import { useToast } from '../hooks/useToast';
 import LoadingScreen, { LoadingStyle } from '../components/LoadingScreen';
 
 // 預設卡背圖片
@@ -18,6 +19,7 @@ const CardDrawTest: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { showSuccess, showError } = useToast();
 
   // 從 URL 查詢參數讀取載入風格：?loading=tarot | neutral | minimal
   // 預設為 'tarot'（保留原有的塔羅風格）
@@ -215,8 +217,50 @@ const CardDrawTest: React.FC = () => {
     return null;
   }
 
+  // 處理 POST 表單提交
+  const handlePost = async (uri: string, formData: FormData): Promise<PostActionResult> => {
+    try {
+      const response = await api.post(uri, formData);
+      if (response.data.success) {
+        // 回傳 data 裡的資料（包含 cards, form_data, flex_deck）
+        // 這些資料會被 FlexCarouselView 的 onPostSuccess 用來更新畫面
+        return { success: true, data: response.data.data };
+      } else {
+        if (!response.data.data?.need_addon) {
+          showError(response.data.message || '提交失敗');
+        }
+        return { success: false, message: response.data.message, data: response.data.data };
+      }
+    } catch (err: any) {
+      const errData = err.response?.data;
+      if (errData?.data?.need_addon) {
+        return { success: false, message: errData.message, data: errData.data };
+      }
+      const errorMessage = errData?.message || '網路錯誤，請稍後再試';
+      showError(errorMessage);
+      return { success: false, message: errorMessage };
+    }
+  };
+
   // 如果 API 回傳 flex_deck，使用 FlexCarouselView
   if (drawResult.flex_deck) {
+    // 使用共用函數取得 cardDrawStyle 和 detailStyle
+    const templateValue = getTemplateFromResult(drawResult);
+    const cardDrawStyle = getCardDrawStyle(templateValue);
+    const detailStyle = getDetailStyle(drawResult.cards?.template_details);
+
+    // 將 form_data 轉換為字串格式（FormData 只接受 string）
+    const serverFormData: FormData = {};
+    if (drawResult.form_data) {
+      Object.entries(drawResult.form_data).forEach(([key, value]) => {
+        serverFormData[key] = String(value);
+      });
+    }
+    // 確保 session_id 有被傳遞（如果 form_data 沒有，就從 drawResult.session_id 取）
+    if (!serverFormData.session_id && drawResult.session_id) {
+      serverFormData.session_id = String(drawResult.session_id);
+    }
+
     return (
       <FlexCarouselView
         flex={drawResult.flex_deck}
@@ -224,6 +268,10 @@ const CardDrawTest: React.FC = () => {
         cardStyle={drawResult.cards?.style}
         variable={drawResult.variable}
         onComplete={handleRestart}
+        cardDrawStyle={cardDrawStyle}
+        detailStyle={detailStyle}
+        serverFormData={serverFormData}
+        onPost={handlePost}
       />
     );
   }

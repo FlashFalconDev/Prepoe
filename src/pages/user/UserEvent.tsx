@@ -14,14 +14,16 @@ const UserEvent: React.FC = () => {
   const [events, setEvents] = useState<ItemEventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
+  /** 預設報名開放，依選擇帶 event_status 呼叫 API 加快載入 */
+  const [filterType, setFilterType] = useState<string>('registration_open');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // 載入活動列表
-  const loadEvents = async () => {
+  // 載入活動列表（依 filterType 帶 event_status）；傳入 signal 避免 React StrictMode 下重複請求
+  const loadEvents = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
-      const response = await getEventSkuList();
+      const eventStatus = filterType !== 'all' ? filterType : undefined;
+      const response = await getEventSkuList(1, 12, undefined, eventStatus, signal);
       if (response.success) {
         const eventsData = response.data.events;
         if (Array.isArray(eventsData)) {
@@ -33,16 +35,18 @@ const UserEvent: React.FC = () => {
         showError('載入失敗', response.message);
       }
     } catch (error: any) {
+      if (error?.name === 'Canceled' || error?.code === 'ERR_CANCELED') return;
       showError('載入失敗', error.message || '無法載入活動資料');
     } finally {
       setLoading(false);
     }
   };
 
-  // 初始化載入
   useEffect(() => {
-    loadEvents();
-  }, []);
+    const ac = new AbortController();
+    loadEvents(ac.signal);
+    return () => ac.abort();
+  }, [filterType]);
 
   // 過濾活動
   const filteredEvents = events.filter(event => {
@@ -123,7 +127,7 @@ const UserEvent: React.FC = () => {
     navigate(`/client/event/join/${event.sku}`);
   };
 
-  // 獲取所有可用的標籤類別
+  /** 分類選項來源：由目前活動列表每筆的 item_tags 彙整成不重複的類別名稱（如 冥想、靜心、靈氣） */
   const getAvailableCategories = () => {
     const categories = new Set<string>();
     events.forEach(event => {
@@ -159,11 +163,13 @@ const UserEvent: React.FC = () => {
               onChange={(e) => setFilterType(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             >
-              <option value="all">所有狀態</option>
               <option value="registration_open">報名開放</option>
               <option value="registration_closed">報名截止</option>
-              <option value="in_progress">進行中</option>
-              <option value="completed">已完成</option>
+              <option value="full">已額滿</option>
+              <option value="in_progress">活動進行中</option>
+              <option value="finished">活動結束</option>
+              <option value="cancelled">活動取消</option>
+              <option value="all">所有狀態</option>
             </select>
             
             <select
@@ -218,8 +224,9 @@ const UserEvent: React.FC = () => {
                       <span className={`px-2 py-1 text-xs rounded-full font-medium ${
                         event.event_status === 'registration_open' ? 'bg-green-500 text-white' :
                         event.event_status === 'registration_closed' ? 'bg-yellow-100 text-yellow-700' :
+                        event.event_status === 'full' ? 'bg-orange-100 text-orange-700' :
                         event.event_status === 'in_progress' ? 'bg-blue-500 text-white' :
-                        event.event_status === 'completed' ? 'bg-purple-500 text-white' :
+                        event.event_status === 'finished' ? 'bg-purple-500 text-white' :
                         event.event_status === 'cancelled' ? 'bg-red-500 text-white' :
                         event.event_status === 'draft' ? 'bg-gray-100 text-gray-700' :
                         'bg-gray-100 text-gray-700'

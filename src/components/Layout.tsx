@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { CreditCard, Bot, Video, MessageSquare, Settings, LogOut, LogIn, User, FileText, Sparkles, Calendar, Briefcase, Users, UserCog, BarChart3 } from 'lucide-react';
+import { CreditCard, Bot, Video, MessageSquare, Settings, LogOut, LogIn, User, FileText, Sparkles, Calendar, Briefcase, Users, UserCog, BarChart3, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../hooks/useToast';
+import { useNotification } from '../hooks/useNotification';
+import NotificationModal from './NotificationModal';
 import { AI_COLORS } from '../constants/colors';
 
 interface LayoutProps {
@@ -11,11 +14,21 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, checkAuth } = useAuth();
+  const { showSuccess } = useToast();
+  const { isOpen: notifOpen, currentNotification, total: notifTotal, currentIndex: notifIndex, fetchUnread, handleConfirm: handleNotifConfirm } = useNotification();
+  const prevPathnameRef = useRef<string | null>(null);
 
   // 判斷是否在 /client 路徑且未登入
   const isClientPath = location.pathname.startsWith('/client');
   const isUnauthenticatedClient = isClientPath && !isAuthenticated;
+
+  // 登出並導航至首頁
+  const handleLogout = async () => {
+    await logout();
+    showSuccess('登出成功');
+    navigate('/');
+  };
 
   // 截斷使用者名稱顯示
   const truncateUsername = (username?: string) => {
@@ -37,7 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         { path: '/client', icon: Bot, label: '導師介紹' },
         { path: '/client/articles', icon: FileText, label: '影音文章' },
         { path: '/client/event', icon: Calendar, label: '課程活動' },
-        { path: '/client/chat', icon: MessageSquare, label: '對話視窗' },
+        { path: '/client/spread', icon: Layers, label: '卡牌占卜' },
         { path: '/client/profile', icon: User, label: '會員專區' },
       ];
     } else {
@@ -52,6 +65,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navItems = getNavItems();
+
+  // 頁面載入時取得站內未讀通知
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUnread();
+    }
+  }, [isAuthenticated, fetchUnread]);
+
+  // 監聽路由變化，切換功能時重新請求 feature_flag
+  useEffect(() => {
+    // 只在已登入且路徑確實變化時才重新請求
+    if (isAuthenticated && prevPathnameRef.current !== null && prevPathnameRef.current !== location.pathname) {
+      console.log('🔄 路由變化，重新請求 feature_flag:', prevPathnameRef.current, '->', location.pathname);
+      checkAuth(true);
+    }
+    // 更新前一個路徑
+    prevPathnameRef.current = location.pathname;
+  }, [location.pathname, isAuthenticated, checkAuth]);
 
   // 根據當前路徑動態生成標題
   const getPageTitle = () => {
@@ -95,6 +126,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         return '課程活動';
       case '/client/articles':
         return '影音文章';
+      case '/client/spread':
+        return '卡牌占卜';
       case '/client/chat':
         return '對話視窗';
       case '/client/profile':
@@ -120,7 +153,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
             )}
             <button
-              onClick={isUnauthenticatedClient ? () => navigate('/login', { state: { from: location } }) : logout}
+              onClick={isUnauthenticatedClient ? () => navigate('/login', { state: { from: location } }) : handleLogout}
               className={`p-2 transition-colors ${
                 isUnauthenticatedClient
                   ? 'text-gray-500 hover:text-orange-600'
@@ -140,7 +173,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {navItems.map(({ path, icon: Icon, label }) => {
             const isActive = location.pathname === path;
             // 檢查是否需要登入才能訪問 (對話視窗和會員專區)
-            const requiresAuth = isUnauthenticatedClient && (path === '/client/chat' || path === '/client/profile');
+            const requiresAuth = isUnauthenticatedClient && (path === '/client/spread' || path === '/client/profile');
 
             if (requiresAuth) {
               // 需要登入的項目 - 點擊後導向登入頁面，並傳遞目標路徑
@@ -185,7 +218,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
             )}
             <button
-              onClick={isUnauthenticatedClient ? () => navigate('/login', { state: { from: location } }) : logout}
+              onClick={isUnauthenticatedClient ? () => navigate('/login', { state: { from: location } }) : handleLogout}
               className={`flex items-center space-x-3 px-4 py-3 w-full text-left rounded-lg transition-colors ${
                 isUnauthenticatedClient
                   ? 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
@@ -204,13 +237,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {children}
       </main>
 
+      {/* 站內通知彈窗 */}
+      <NotificationModal
+        isOpen={notifOpen}
+        notification={currentNotification}
+        total={notifTotal}
+        currentIndex={notifIndex}
+        onConfirm={handleNotifConfirm}
+      />
+
       {/* Bottom Navigation - Mobile Only */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden">
         <div className="flex justify-around items-center h-16 px-4">
           {navItems.map(({ path, icon: Icon, label }) => {
             const isActive = location.pathname === path;
             // 檢查是否需要登入才能訪問 (對話視窗和會員專區)
-            const requiresAuth = isUnauthenticatedClient && (path === '/client/chat' || path === '/client/profile');
+            const requiresAuth = isUnauthenticatedClient && (path === '/client/spread' || path === '/client/profile');
 
             if (requiresAuth) {
               // 需要登入的項目 - 點擊後導向登入頁面，並傳遞目標路徑

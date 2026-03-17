@@ -13,6 +13,8 @@ interface KeysManagerModalProps {
   managedClientSid?: string;
   userRole?: string; // 用戶在該公司的角色
   initialTab?: TabKey; // 初始分頁，預設為 'list'
+  lockedMode?: 'unique' | 'event' | 'achievement'; // 鎖定模式，隱藏模式選擇器與列表分頁
+  onCreated?: (result: any) => void; // 建立成功回呼
 }
 
 type TabKey = 'list' | 'create';
@@ -27,7 +29,7 @@ const defaultPayload: KeyBatchCreatePayload = {
   code_len: 12,
 };
 
-const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, managedClientId, managedClientName, managedClientSid, userRole, initialTab = 'list' }) => {
+const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, managedClientId, managedClientName, managedClientSid, userRole, initialTab = 'list', lockedMode, onCreated }) => {
   const { user } = useAuth();
   const [active, setActive] = useState<TabKey>('list');
   
@@ -38,6 +40,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [batches, setBatches] = useState<any[]>([]);
+  const [filterType, setFilterType] = useState<string>('all');
 
   // create state
   const [payload, setPayload] = useState<KeyBatchCreatePayload>({ ...defaultPayload, managed_client_id: managedClientId });
@@ -60,13 +63,13 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
 
   useEffect(() => {
     if (isOpen) {
-      setActive(initialTab);
-      setPayload({ ...defaultPayload, managed_client_id: managedClientId });
+      setActive(lockedMode ? 'create' : initialTab);
+      setPayload({ ...defaultPayload, managed_client_id: managedClientId, ...(lockedMode ? { mode: lockedMode } : {}) });
       setBatches([]);
       setError(null);
       setSelectedEtickets([]);
     }
-  }, [isOpen, managedClientId, initialTab]);
+  }, [isOpen, managedClientId, initialTab, lockedMode]);
 
   // 載入可選票券商品列表
   const fetchEticketItems = async () => {
@@ -113,12 +116,29 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
   }, [isOpen, active, managedClientId]);
 
   const isUnique = payload.mode === 'unique';
+  const isAchievement = payload.mode === 'achievement';
+
+  const filteredBatches = useMemo(() => {
+    if (filterType === 'all') return batches;
+    return batches.filter((b: any) => {
+      const bMode = String(b.key_type || b.mode || b.batch_type || '').toUpperCase();
+      return bMode === filterType;
+    });
+  }, [batches, filterType]);
+
   const preview = useMemo(() => {
     const copy: any = { ...payload };
     if (isUnique) {
       delete copy.event_code;
       delete copy.max_uses;
       delete copy.per_member;
+    } else if (isAchievement) {
+      delete copy.count;
+      delete copy.code_len;
+      delete copy.event_code;
+      delete copy.max_uses;
+      delete copy.per_member;
+      delete copy.days;
     } else {
       delete copy.count;
       delete copy.code_len;
@@ -128,7 +148,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
       copy.eticket_rewards = selectedEtickets;
     }
     return copy;
-  }, [payload, isUnique, selectedEtickets]);
+  }, [payload, isUnique, isAchievement, selectedEtickets]);
 
   // 票券選擇處理函數
   const handleEticketToggle = (itemId: number) => {
@@ -166,6 +186,8 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
     if (isUnique) {
       if (!payload.count || payload.count <= 0) return '請輸入有效的數量';
       if (!payload.code_len || payload.code_len < 12 || payload.code_len > 18) return '金鑰長度需介於 12~18';
+    } else if (isAchievement) {
+      // ACHIEVEMENT 模式不需要額外欄位驗證
     } else {
       if (!payload.max_uses || payload.max_uses <= 0) return '請輸入總使用次數限制';
       // 移除每人次數的限制
@@ -189,9 +211,14 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
       };
       const result = await keysCreateBatch(finalPayload);
       if (result?.success) {
-        setActive('list');
-        setSelectedEtickets([]); // 重置票券選擇
-        fetchBatches();
+        if (onCreated) await onCreated(result);
+        if (lockedMode) {
+          onClose();
+        } else {
+          setActive('list');
+          setSelectedEtickets([]);
+          fetchBatches();
+        }
       } else {
         alert(result?.error || '建立失敗');
       }
@@ -202,6 +229,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
     }
   };
 
+  // ========== Trigger 管理函式 ==========
   if (!isOpen) return null;
 
   const formatToSeconds = (value?: string) => {
@@ -251,11 +279,11 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[2000] flex items-center justify-center p-4" onClick={onClose}>
+    <div className={`fixed inset-0 bg-black bg-opacity-50 ${lockedMode ? 'z-[2100]' : 'z-[2000]'} flex items-center justify-center p-4`} onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">金鑰設定</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{lockedMode === 'achievement' ? '建立條件觸發批次' : '金鑰設定'}</h3>
             {managedClientName && (
               <div className="text-sm text-gray-500 mt-0.5">{managedClientName}</div>
             )}
@@ -265,7 +293,8 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
           </button>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs - lockedMode 時隱藏 */}
+        {!lockedMode && (
         <div className="px-5 pt-3 border-b border-gray-100 flex-shrink-0">
           <div className="flex gap-4">
             {([
@@ -284,10 +313,35 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
             ))}
           </div>
         </div>
+        )}
 
         {/* Content */}
         {active === 'list' ? (
           <div className="p-5 overflow-y-auto flex-1">
+            {/* 類型篩選 */}
+            {!loading && !error && batches.length > 0 && (
+              <div className="flex items-center gap-2 mb-4">
+                {[
+                  { key: 'all', label: '全部' },
+                  { key: 'UNIQUE', label: '一次性' },
+                  { key: 'EVENT', label: '事件代碼' },
+                  { key: 'ACHIEVEMENT', label: '條件觸發' },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilterType(f.key)}
+                    className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                      filterType === f.key
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                    }`}
+                    title={f.key === 'all' ? undefined : f.key}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {loading ? (
               <div className="text-center text-gray-500">讀取中...</div>
             ) : error ? (
@@ -296,7 +350,10 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
               <div className="text-center text-gray-500">尚未建立任何批次</div>
             ) : (
               <div className="space-y-3">
-                {batches.map((b: any, idx: number) => {
+                {filteredBatches.length === 0 && (
+                  <div className="text-center text-gray-400 py-6">此分類沒有金鑰批次</div>
+                )}
+                {filteredBatches.map((b: any, idx: number) => {
                   const title = b.title || b.name || `批次 ${b.id || idx+1}`;
                   const mode = b.key_type || b.mode || b.batch_type || '-';
                   const createdAt = b.created_at || b.mdt_add || '-';
@@ -441,27 +498,31 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
 
                   return (
                     <div key={b.id || idx} className="py-3 px-3 bg-white border border-gray-200 rounded-xl relative">
+                      {String(mode).toUpperCase() !== 'ACHIEVEMENT' && (
                       <div className="absolute top-3 right-3 flex flex-col gap-1.5">
-                        <button onClick={() => handleGetOne(b.id)} className={`p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700`} aria-label="取得未使用金鑰">
-                          <Key size={16} />
-                        </button>
-                        <button
-                          onClick={handleViewUsedKeys}
-                          className={`p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700`}
-                          aria-label="查看已使用金鑰"
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button onClick={handleDownload} className={`p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700`} aria-label="下載">
-                          <Download size={16} />
-                        </button>
+                            <button onClick={() => handleGetOne(b.id)} className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700" aria-label="取得未使用金鑰">
+                              <Key size={16} />
+                            </button>
+                            <button onClick={handleViewUsedKeys} className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700" aria-label="查看已使用金鑰">
+                              <Check size={16} />
+                            </button>
+                            <button onClick={handleDownload} className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700" aria-label="下載">
+                              <Download size={16} />
+                            </button>
                       </div>
+                      )}
                       <div className="pr-14">
                         <div className="flex items-center gap-2 font-medium text-gray-900">
                           <span className="truncate">{title}</span>
-                          {mode && (
-                            <span className="px-2 py-0.5 rounded-md text-xs border border-gray-300 text-gray-700 bg-white whitespace-nowrap">{String(mode).toUpperCase()}</span>
-                          )}
+                          {mode && (() => {
+                            const modeUpper = String(mode).toUpperCase();
+                            const modeLabel: Record<string, string> = { UNIQUE: '一次性', EVENT: '事件代碼', ACHIEVEMENT: '條件觸發' };
+                            return (
+                              <span className="px-2 py-0.5 rounded-md text-xs border border-gray-300 text-gray-700 bg-white whitespace-nowrap cursor-default" title={modeUpper}>
+                                {modeLabel[modeUpper] || modeUpper}
+                              </span>
+                            );
+                          })()}
                           <div className={`w-2 h-2 rounded-full ${statusLight}`} title={isActive ? '進行中' : '無效'}></div>
                         </div>
                         <div className="mt-1 text-sm text-gray-600">
@@ -483,20 +544,26 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
         ) : (
           <div className={`grid grid-cols-1 ${showPreview ? 'lg:grid-cols-2' : ''} gap-0 overflow-y-auto flex-1`}>
             <div className="p-5 lg:border-r border-gray-100">
-              {/* 模式 */}
+              {/* 模式 - lockedMode 時隱藏 */}
+              {!lockedMode && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">模式</label>
                 <div className="flex items-center gap-4">
-                  <label className="inline-flex items-center gap-2 text-sm">
+                  <label className="inline-flex items-center gap-2 text-sm cursor-pointer" title="UNIQUE">
                     <input type="radio" checked={payload.mode === 'unique'} onChange={() => setPayload({ ...payload, mode: 'unique' })} />
-                    UNIQUE（一次性）
+                    一次性
                   </label>
-                  <label className="inline-flex items-center gap-2 text-sm">
+                  <label className="inline-flex items-center gap-2 text-sm cursor-pointer" title="EVENT">
                     <input type="radio" checked={payload.mode === 'event'} onChange={() => setPayload({ ...payload, mode: 'event' })} />
-                    EVENT（事件代碼）
+                    事件代碼
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm cursor-pointer" title="ACHIEVEMENT">
+                    <input type="radio" checked={payload.mode === 'achievement'} onChange={() => setPayload({ ...payload, mode: 'achievement', days: undefined })} />
+                    條件觸發
                   </label>
                 </div>
               </div>
+              )}
 
               {/* 基本設定 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -546,6 +613,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
 
               {/* 有效天數 + 角色 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                {!isAchievement && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">有效天數</label>
                   <input
@@ -556,7 +624,8 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
                     min={1}
                   />
                 </div>
-                <div className="md:col-span-2">
+                )}
+                <div className={isAchievement ? "md:col-span-3" : "md:col-span-2"}>
                   <label className="block text-sm font-medium text-gray-700 mb-2">角色設定</label>
                   <select
                     value={payload.role || ''}
@@ -604,7 +673,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
               )}
 
               {/* EVENT */}
-              {!isUnique && (
+              {payload.mode === 'event' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">總使用次數 *</label>
@@ -709,13 +778,15 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
             <div className="p-5 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">即時預覽</h4>
               <div className="text-sm text-gray-700 space-y-2">
-                <div>模式：<span className="font-semibold">{isUnique ? 'UNIQUE (一次性)' : 'EVENT (事件代碼)'}</span></div>
+                <div>模式：<span className="font-semibold">{isUnique ? '一次性' : isAchievement ? '條件觸發' : '事件代碼'}</span></div>
                 <div>標題：<span className="font-semibold">{payload.title || '—'}</span></div>
                 {payload.managed_client_id ? (
                   <div>managed_client_id：<span className="font-semibold">{payload.managed_client_id}</span></div>
                 ) : null}
                 {isUnique ? (
                   <div>將產生 <span className="font-semibold">{payload.count || 0}</span> 組、長度 <span className="font-semibold">{payload.code_len || 0}</span> 的唯一金鑰</div>
+                ) : isAchievement ? (
+                  <div>條件觸發專用金鑰（無有效天數限制）</div>
                 ) : (
                   <div>事件代碼 <span className="font-semibold">{payload.event_code || '(自動產生)'}</span>，總使用 <span className="font-semibold">{payload.max_uses || 0}</span> 次</div>
                 )}
@@ -724,7 +795,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
                   <span className="font-semibold">{payload.coins}</span>
                 </div>}
                 {isAdmin && (payload.tokens || 0) > 0 && <div>贈送 Tokens：<span className="font-semibold">{payload.tokens}</span></div>}
-                <div>有效天數：{payload.days || 0} 天</div>
+                {!isAchievement && <div>有效天數：{payload.days || 0} 天</div>}
                 <div>角色設定：{payload.role || '—'}</div>
                 {selectedEtickets.length > 0 && (
                   <div>
@@ -925,6 +996,7 @@ const KeysManagerModal: React.FC<KeysManagerModalProps> = ({ isOpen, onClose, ma
         </div>,
         document.body
       )}
+
     </div>,
     document.body
   );

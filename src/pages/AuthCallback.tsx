@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { handleAuthCallback, isCallbackPage } from '../services/thirdPartyAuth';
-import { getProtectedData } from '../config/api';
+import { getProtectedData, getCSRFToken } from '../config/api';
 import { AI_COLORS } from '../constants/colors';
 import { normalizePath, getBasename } from '../utils/pathUtils';
 
@@ -15,9 +15,15 @@ const AuthCallback: React.FC = () => {
   const calledRef = useRef(false); // 防止重複呼叫
 
   useEffect(() => {
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 1000;
+
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     const processCallback = async () => {
       if (calledRef.current) return;
       calledRef.current = true;
+
       try {
         if (!isCallbackPage()) {
           navigate('/login');
@@ -26,47 +32,73 @@ const AuthCallback: React.FC = () => {
         setStatus('loading');
         setMessage('正在處理登入...');
 
-        // 處理第三方登入回調
-        const result = await handleAuthCallback();
-        if (result.success) {
-          setStatus('success');
-          setMessage('登入成功！正在跳轉...');
-          if (result.user) {
-            login(result.user);
+        // 確保 CSRF token 已就緒
+        await getCSRFToken();
+
+        // 處理第三方登入回調（含重試機制）
+        let lastError: any = null;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            if (attempt > 0) {
+              console.log(`第三方登入回調重試 (${attempt}/${MAX_RETRIES})...`);
+              setMessage(`正在重試登入... (${attempt}/${MAX_RETRIES})`);
+              await delay(RETRY_DELAY_MS);
+            }
+
+            const result = await handleAuthCallback();
+            if (result.success) {
+              setStatus('success');
+              setMessage('登入成功！正在跳轉...');
+              if (result.user) {
+                login(result.user);
+              }
+
+              // 登入成功後，優先從 localStorage 取得重定向路徑
+              // 如果沒有，再嘗試從後端 session 取得
+              let redirectPath = localStorage.getItem('login_redirect_path');
+              console.log('=== AuthCallback Debug ===');
+              console.log('LocalStorage redirect path:', redirectPath);
+
+              if (!redirectPath) {
+                // 如果 localStorage 沒有，嘗試從後端 session 取得
+                const protectedResponse = await getProtectedData();
+                console.log('Protected Response:', protectedResponse.data);
+                console.log('Session Info:', protectedResponse.data.session_info);
+                console.log('Session Data:', protectedResponse.data.session_info?.session_data);
+                console.log('Next Path from session:', protectedResponse.data.session_info?.session_data?.next);
+                redirectPath = protectedResponse.data.session_info?.session_data?.next || '/';
+              } else {
+                // 使用完後立即清除，避免影響下次登入
+                localStorage.removeItem('login_redirect_path');
+              }
+
+              // 清除 URL 上的 code/state，避免刷新重複觸發
+              const basename = getBasename();
+              window.history.replaceState({}, document.title, basename);
+
+              // 標準化重定向路徑
+              const normalizedPath = normalizePath(redirectPath || '/');
+
+              setTimeout(() => {
+                navigate(normalizedPath, { replace: true });
+              }, 1500);
+              return; // 成功，結束
+            } else {
+              throw new Error(result.error || '登入失敗');
+            }
+          } catch (error: any) {
+            lastError = error;
+            console.warn(`第三方登入回調第 ${attempt + 1} 次嘗試失敗:`, error.message);
+            // 確定性錯誤不重試
+            const status = error?.response?.status;
+            if (status === 400 || status === 401) {
+              break;
+            }
           }
-
-          // 登入成功後，優先從 localStorage 取得重定向路徑
-          // 如果沒有，再嘗試從後端 session 取得
-          let redirectPath = localStorage.getItem('login_redirect_path');
-          console.log('=== AuthCallback Debug ===');
-          console.log('LocalStorage redirect path:', redirectPath);
-
-          if (!redirectPath) {
-            // 如果 localStorage 沒有，嘗試從後端 session 取得
-            const protectedResponse = await getProtectedData();
-            console.log('Protected Response:', protectedResponse.data);
-            console.log('Session Info:', protectedResponse.data.session_info);
-            console.log('Session Data:', protectedResponse.data.session_info?.session_data);
-            console.log('Next Path from session:', protectedResponse.data.session_info?.session_data?.next);
-            redirectPath = protectedResponse.data.session_info?.session_data?.next || '/';
-          } else {
-            // 使用完後立即清除，避免影響下次登入
-            localStorage.removeItem('login_redirect_path');
-          }
-
-          // 清除 URL 上的 code/state，避免刷新重複觸發
-          const basename = getBasename();
-          window.history.replaceState({}, document.title, basename);
-
-          // 標準化重定向路徑
-          const normalizedPath = normalizePath(redirectPath || '/');
-
-          setTimeout(() => {
-            navigate(normalizedPath, { replace: true });
-          }, 1500);
-        } else {
-          throw new Error(result.error || '登入失敗');
         }
+
+        // 所有重試都失敗
+        throw lastError || new Error('登入失敗');
       } catch (error: any) {
         console.error('第三方登入回調處理失敗:', error);
         setStatus('error');

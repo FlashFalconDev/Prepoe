@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Newspaper, ShoppingBag, UtensilsCrossed, Ticket, User, X, LogIn, Gift } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Ticket, Calendar, User, X, LogIn, Gift } from 'lucide-react';
 import { api, API_ENDPOINTS } from '../config/api';
 
 // 會員卡資料介面
@@ -155,9 +155,9 @@ const ShopLayout: React.FC<ShopLayoutProps> = ({ children }) => {
   const menuItems = [
     {
       id: 'home',
-      label: '最新資訊',
-      icon: Newspaper,
-      path: `/shop/${clientSid}`,
+      label: '平台入口',
+      icon: LayoutDashboard,
+      path: '/client',
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
       activeColor: 'text-blue-600',
@@ -172,15 +172,6 @@ const ShopLayout: React.FC<ShopLayoutProps> = ({ children }) => {
       activeColor: 'text-green-600',
     },
     {
-      id: 'food',
-      label: '美食點餐',
-      icon: UtensilsCrossed,
-      path: `/shop/${clientSid}/food`,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
-      activeColor: 'text-orange-600',
-    },
-    {
       id: 'tickets',
       label: '票券商城',
       icon: Ticket,
@@ -188,6 +179,15 @@ const ShopLayout: React.FC<ShopLayoutProps> = ({ children }) => {
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
       activeColor: 'text-purple-600',
+    },
+    {
+      id: 'events',
+      label: '課程活動',
+      icon: Calendar,
+      path: `/shop/${clientSid}/events`,
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-100',
+      activeColor: 'text-amber-600',
     },
     {
       id: 'member',
@@ -249,14 +249,6 @@ const ShopLayout: React.FC<ShopLayoutProps> = ({ children }) => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isLoggedIn && memberCard && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-full">
-                  <Gift size={14} className="text-purple-600" />
-                  <span className="text-xs font-medium text-purple-600">
-                    {memberCard.points} 點
-                  </span>
-                </div>
-              )}
               <span className="text-sm font-medium text-gray-600">
                 {getPageTitle()}
               </span>

@@ -27,7 +27,7 @@ interface AuthContextType {
   featureFlag?: FeatureFlag;
   login: (user: User) => void;
   logout: () => Promise<void>;
-  checkAuth: () => Promise<void>;
+  checkAuth: (force?: boolean) => Promise<void>;
   loadFeatureFlag: () => Promise<void>;
 }
 
@@ -57,6 +57,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = (userData: User) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    // 清除登出標記，允許重新驗證
+    sessionStorage.removeItem('logged_out');
     // 重置認證檢查標記,以便可以重新檢查並獲取完整的用戶資料
     hasCheckedAuthRef.current = false;
     // 使用 setTimeout 來確保 checkAuth 在當前執行上下文之後執行
@@ -74,13 +76,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setFeatureFlag(undefined);
       localStorage.removeItem('user');
-      hasCheckedAuthRef.current = false; // 重置認證檢查標記
+      // 設定登出標記（sessionStorage 在同 tab 重新整理後仍保留）
+      // 防止頁面重載時 checkAuth 因 HttpOnly session cookie 將使用者認回來
+      sessionStorage.setItem('logged_out', 'true');
+      hasCheckedAuthRef.current = true;
+
+      // 清除前端可存取的認證相關 cookie
+      document.cookie.split(';').forEach(cookie => {
+        const name = cookie.split('=')[0].trim();
+        if (['csrftoken', 'csrf_token', 'CSRF-Token', 'sessionid'].includes(name)) {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        }
+      });
     }
   };
 
-  const checkAuth = useCallback(async () => {
-    // 防止重複請求 - 檢查是否已檢查過或正在檢查中
-    if (hasCheckedAuthRef.current || isCheckingAuthRef.current) {
+  const checkAuth = useCallback(async (force: boolean = false) => {
+    // 如果使用者已明確登出，不要重新驗證（防止 HttpOnly cookie 導致自動重新登入）
+    if (sessionStorage.getItem('logged_out')) {
+      console.log('⚠️ 使用者已登出，跳過自動驗證');
+      setUser(null);
+      setFeatureFlag(undefined);
+      setIsLoading(false);
+      hasCheckedAuthRef.current = true;
+      return;
+    }
+
+    // 防止重複請求 - 檢查是否已檢查過或正在檢查中（除非是強制模式）
+    if (!force && (hasCheckedAuthRef.current || isCheckingAuthRef.current)) {
       console.log('⚠️ 認證已檢查或正在檢查中，跳過重複請求');
       return;
     }
@@ -117,6 +140,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.setItem('user', JSON.stringify(userData));
           hasCheckedAuthRef.current = true; // 標記為已檢查
           console.log('從API獲取用戶資料:', userData);
+          if (force) {
+            console.log('✅ 強制重新請求完成，已更新 feature_flag');
+          }
         } else {
           // 否則嘗試從localStorage恢復
           const savedUser = localStorage.getItem('user');

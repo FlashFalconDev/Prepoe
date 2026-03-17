@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AI_COLORS } from '../constants/colors';
 import { getMemberComplete, updateMemberDetails, type MemberComplete, type MemberDetailsUpdateData } from '../config/api';
+import { COIN_LABEL } from '../config/terms';
 import { useToast } from '../hooks/useToast';
 
 interface MoreItem {
@@ -314,7 +315,7 @@ const More: React.FC = () => {
                     <div className="text-lg font-bold text-yellow-600 mb-1">
                       {memberData.member_card.coins.toLocaleString()}
                     </div>
-                    <div className="text-xs text-gray-500">金幣</div>
+                    <div className="text-xs text-gray-500">{COIN_LABEL}</div>
                   </div>
                 </div>
 

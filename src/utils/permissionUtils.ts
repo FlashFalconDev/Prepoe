@@ -6,7 +6,7 @@ export interface PermissionCheckOptions {
   useToast?: boolean;
   showSuccess?: (message: string) => void;
   showError?: (message: string) => void;
-  checkAuth?: () => Promise<void>;
+  checkAuth?: (force?: boolean) => Promise<void>;
 }
 
 export const handlePermissionRedeem = async (
@@ -47,9 +47,9 @@ export const handlePermissionRedeem = async (
         alert(successMessage);
       }
 
-      // 重新載入使用者資訊以更新 featureFlag
+      // 重新載入使用者資訊以更新 featureFlag（強制重新請求）
       if (checkAuth) {
-        await checkAuth();
+        await (checkAuth as (force?: boolean) => Promise<void>)(true);
       }
 
       if (onSuccess) {

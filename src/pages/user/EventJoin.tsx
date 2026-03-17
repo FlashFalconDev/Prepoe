@@ -9,12 +9,15 @@ import DynamicFormField from '../../components/DynamicFormField';
 import ParticipantFormCard from '../../components/ParticipantFormCard';
 import { 
   getEventJoinInfo, 
-  createOrder, 
+  createOrder,
+  getMemberCard,
   EventJoinInfo, 
   CreateOrderRequest,
   DynamicFormData,
-  FormField
+  FormField,
+  MemberCard
 } from '../../config/api';
+import { COIN_LABEL } from '../../config/terms';
 import { AI_COLORS } from '../../constants/colors';
 import { sortFormFields, initializeFormData } from '../../utils/formUtils';
 
@@ -136,7 +139,7 @@ const mergeFormFields = (backendFields: FormField[] | undefined): FormField[] =>
 };
 
 const EventJoin: React.FC = () => {
-  const { sku } = useParams<{ sku: string }>();
+  const { sku, clientSid } = useParams<{ sku: string; clientSid?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
@@ -159,6 +162,11 @@ const EventJoin: React.FC = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showRemarkSection, setShowRemarkSection] = useState(false);
   const [remarkNote, setRemarkNote] = useState('');
+
+  // Coin 折抵相關
+  const [memberCard, setMemberCard] = useState<MemberCard | null>(null);
+  const [useCoins, setUseCoins] = useState(false);
+  const [coinAmount, setCoinAmount] = useState(0);
 
   // 直接跳轉付款頁面（避免被 LINE 等 App 阻擋彈出視窗）
   const redirectToPayment = (html: string) => {
@@ -200,11 +208,14 @@ const EventJoin: React.FC = () => {
 
       console.log('🔍 正在載入活動資訊，SKU:', sku);
 
-      // 將 URL 查詢參數轉換為物件
+      // 將 URL 查詢參數轉換為物件；若來自 Shop（/shop/:clientSid/event/join/:sku）則帶入 client_sid
       const queryParams: Record<string, string> = {};
       searchParams.forEach((value, key) => {
         queryParams[key] = value;
       });
+      if (clientSid) {
+        queryParams.client_sid = clientSid;
+      }
 
       console.log('🔍 URL 查詢參數:', queryParams);
 
@@ -234,7 +245,7 @@ const EventJoin: React.FC = () => {
       setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [sku, searchParams, showError]);
+  }, [sku, clientSid, searchParams, showError]);
 
   // 載入活動資訊
   useEffect(() => {
@@ -242,6 +253,21 @@ const EventJoin: React.FC = () => {
       loadEventInfo();
     }
   }, [sku, loadEventInfo]);
+
+  // 載入會員資料（取得 coin 餘額與折抵配置）
+  const loadMemberCard = useCallback(async (orderAmount?: number) => {
+    try {
+      const response = await getMemberCard(orderAmount);
+      if (response.success && response.data) {
+        setMemberCard(response.data);
+      }
+    } catch {
+      // 訪客或未綁定會員，不影響報名流程
+    }
+  }, []);
+
+  // 追蹤上次請求的總價，避免重複請求
+  const lastRequestedPriceRef = useRef<number | null>(null);
 
   // 載入追蹤腳本（如 Meta Pixel Code）
   useTrackingScript(eventInfo?.tracking_script);
@@ -355,7 +381,69 @@ const EventJoin: React.FC = () => {
   
   const priceInfo = calculatePriceDetails();
   const totalPrice = priceInfo.totalPrice;
+
+  // Coin 折抵計算
+  const coinsPerTwd = memberCard?.coins_per_twd || 0; // N coin = 1 TWD
+  const coinEnabled = coinsPerTwd > 0 && (memberCard?.coins || 0) > 0;
+  const userCoins = memberCard?.coins || 0;
+
+  // 根據訂單金額計算可折抵上限
+  const maxRedeemCoins = memberCard?.coin_max_redeem_coins
+    ? Math.min(memberCard.coin_max_redeem_coins, userCoins)
+    : userCoins;
+  const maxRedeemAmountTwd = memberCard?.coin_max_redeem_amount_twd
+    ? Math.min(memberCard.coin_max_redeem_amount_twd, totalPrice)
+    : totalPrice;
+  // 根據匯率和金額上限，算出實際可用的 coin 上限（必須是 coinsPerTwd 的整數倍）
+  const rawMaxCoins = Math.min(
+    maxRedeemCoins,
+    Math.floor(maxRedeemAmountTwd * coinsPerTwd)
+  );
+  // 確保是 coinsPerTwd 的整數倍，不完整的單位不能折抵
+  const effectiveMaxCoins = coinsPerTwd > 0
+    ? Math.floor(rawMaxCoins / coinsPerTwd) * coinsPerTwd
+    : rawMaxCoins;
+
+  // 折抵金額（只有完整單位才能折抵）
+  const validCoinAmount = coinsPerTwd > 0
+    ? Math.floor(coinAmount / coinsPerTwd) * coinsPerTwd
+    : coinAmount;
+  const coinDiscountAmount = useCoins && coinsPerTwd > 0
+    ? Math.floor(validCoinAmount / coinsPerTwd)
+    : 0;
+  const finalPrice = Math.max(0, totalPrice - coinDiscountAmount);
+
+  // 當總價變化時，重新載入會員資料以獲取正確的折抵上限
+  useEffect(() => {
+    if (totalPrice > 0 && totalPrice !== lastRequestedPriceRef.current) {
+      lastRequestedPriceRef.current = totalPrice;
+      loadMemberCard(totalPrice);
+    }
+  }, [totalPrice, loadMemberCard]);
+
+  // 當折抵上限變化時，確保 coinAmount 不超過上限（調整為有效的整數倍）
+  useEffect(() => {
+    if (coinAmount > effectiveMaxCoins) {
+      setCoinAmount(effectiveMaxCoins);
+    }
+  }, [effectiveMaxCoins, coinAmount]);
   
+  // 處理 coin 輸入變更（確保是 coinsPerTwd 的整數倍）
+  const handleCoinChange = (value: number) => {
+    // 先限制在上限範圍內
+    const clamped = Math.max(0, Math.min(value, effectiveMaxCoins));
+    // 調整為 coinsPerTwd 的整數倍
+    const validValue = coinsPerTwd > 0
+      ? Math.floor(clamped / coinsPerTwd) * coinsPerTwd
+      : clamped;
+    setCoinAmount(validValue);
+  };
+
+  // 快速設定最大 coin（已經是整數倍）
+  const handleUseMaxCoins = () => {
+    setCoinAmount(effectiveMaxCoins);
+  };
+
   // 處理參加者數量變更
   const handleParticipantCountChange = (count: number) => {
     setParticipantCount(count);
@@ -467,8 +555,8 @@ const EventJoin: React.FC = () => {
     // 檢查聯絡人設定（只需確認有選擇）
     // primaryContactIndex 預設為 0，不需要額外檢查
     
-    // 檢查付款方式
-    if (totalPrice > 0 && !paymentType) {
+    // 檢查付款方式（折抵後仍需付費才檢查）
+    if (finalPrice > 0 && !paymentType) {
       showError('請選擇付款方式');
       return;
     }
@@ -482,11 +570,17 @@ const EventJoin: React.FC = () => {
 
     // 確認報名（顯示總價和人數）
     const primaryContactName = participants[primaryContactIndex]?.name || `參加者 ${primaryContactIndex + 1}`;
+    const coinInfo = useCoins && coinAmount > 0
+      ? `\n使用 ${coinAmount.toLocaleString()} ${COIN_LABEL}折抵 NT$ ${coinDiscountAmount.toLocaleString()}`
+      : '';
+    const priceDisplay = finalPrice > 0
+      ? `\n應付金額：NT$ ${finalPrice.toLocaleString()}`
+      : (totalPrice > 0 ? `\n（${COIN_LABEL}全額折抵）` : '');
     const confirmed = await confirm({
       title: '確認報名',
       message: `確定要報名參加「${eventInfo.name}」嗎？\n報名人數：${participantCount}人${
         totalPrice > 0 ? `\n活動費用：NT$ ${totalPrice.toLocaleString()}` : ''
-      }\n聯絡人：${primaryContactName}`,
+      }${coinInfo}${priceDisplay}\n聯絡人：${primaryContactName}`,
       confirmText: '確認報名',
       cancelText: '取消',
       type: 'info'
@@ -502,8 +596,8 @@ const EventJoin: React.FC = () => {
         return;
       }
 
-      // 如果是付費活動，使用訂單創建 API
-      if (totalPrice > 0 && paymentType) {
+      // 如果是付費活動（包含金幣全額折抵），使用訂單創建 API
+      if (totalPrice > 0) {
         // 清理所有參加者的數據，移除未顯示的條件欄位，並加入 is_primary_contact 欄位
         const cleanedParticipants = participants.map((participant, index) => ({
           ...cleanParticipantData(participant),
@@ -517,7 +611,7 @@ const EventJoin: React.FC = () => {
               quantity: participantCount
             }
           ],
-          payment_method: paymentType,
+          payment_method: finalPrice > 0 ? paymentType : 'Free',
           participant_info: {
             participant_count: participantCount,
             participants: cleanedParticipants,
@@ -525,6 +619,13 @@ const EventJoin: React.FC = () => {
             remark: remarkNote
           } as any
         };
+
+        // 帶入 Coin 折抵參數
+        if (useCoins && coinAmount > 0 && coinDiscountAmount > 0) {
+          orderData.use_coins = coinAmount;
+          orderData.total_coins_used = coinAmount;
+          orderData.coins_discount_amount = coinDiscountAmount;
+        }
 
         console.log('📝 創建訂單資料:', orderData);
         console.log('🧹 清理前的參加者數據:', participants);
@@ -555,6 +656,8 @@ const EventJoin: React.FC = () => {
             setAgreeTerms(false);
             setRemarkNote('');
             setShowRemarkSection(false);
+            setUseCoins(false);
+            setCoinAmount(0);
 
             // 可以跳轉到成功頁面或顯示訂單詳情
             if (orderResponse.data?.order_id) {
@@ -579,6 +682,8 @@ const EventJoin: React.FC = () => {
         setAgreeTerms(false);
         setRemarkNote('');
         setShowRemarkSection(false);
+        setUseCoins(false);
+        setCoinAmount(0);
       }
 
     } catch (error: any) {
@@ -846,6 +951,96 @@ const EventJoin: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Coin 折抵區塊 */}
+                    {totalPrice > 0 && coinEnabled && (
+                      <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                            <i className="ri-coin-line text-yellow-600"></i>
+                            <span>{COIN_LABEL}折抵</span>
+                          </h3>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={useCoins}
+                              onChange={(e) => {
+                                setUseCoins(e.target.checked);
+                                if (!e.target.checked) setCoinAmount(0);
+                              }}
+                              className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 rounded"
+                            />
+                            <span className="text-sm text-gray-700">使用{COIN_LABEL}</span>
+                          </label>
+                        </div>
+
+                        {/* 金幣餘額資訊 */}
+                        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                          <span>我的{COIN_LABEL}餘額</span>
+                          <span className="font-medium text-yellow-700">
+                            {userCoins.toLocaleString()} {COIN_LABEL}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mb-3">
+                          折抵匯率：{coinsPerTwd} {COIN_LABEL} = NT$ 1
+                          {effectiveMaxCoins > 0 && (
+                            <span className="ml-2">
+                              （最多可用 {effectiveMaxCoins.toLocaleString()} {COIN_LABEL}，折抵 NT$ {Math.floor(effectiveMaxCoins / coinsPerTwd).toLocaleString()}）
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 使用金幣數量輸入 */}
+                        {useCoins && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="number"
+                                min={0}
+                                max={effectiveMaxCoins}
+                                step={coinsPerTwd}
+                                value={coinAmount}
+                                onChange={(e) => handleCoinChange(Number(e.target.value))}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                                placeholder={`輸入${COIN_LABEL}數量`}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleUseMaxCoins}
+                                className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors whitespace-nowrap"
+                              >
+                                最大
+                              </button>
+                            </div>
+
+                            {/* 折抵滑桿 */}
+                            {effectiveMaxCoins > 0 && (
+                              <input
+                                type="range"
+                                min={0}
+                                max={effectiveMaxCoins}
+                                step={coinsPerTwd}
+                                value={coinAmount}
+                                onChange={(e) => handleCoinChange(Number(e.target.value))}
+                                className="w-full h-2 bg-yellow-200 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                              />
+                            )}
+
+                            {/* 折抵結果 */}
+                            {coinAmount > 0 && (
+                              <div className="flex justify-between text-sm font-medium bg-yellow-100 rounded-lg px-3 py-2">
+                                <span className="text-yellow-800">
+                                  使用 {coinAmount.toLocaleString()} {COIN_LABEL}
+                                </span>
+                                <span className="text-green-700">
+                                  -NT$ {coinDiscountAmount.toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* 費用明細 */}
                     {totalPrice > 0 && (
                       <div className="bg-purple-50 rounded-lg p-6 border-2 border-purple-200">
@@ -890,13 +1085,28 @@ const EventJoin: React.FC = () => {
                               ))}
                             </div>
                           ))}
+
+                          {/* Coin 折抵明細 */}
+                          {useCoins && coinAmount > 0 && coinDiscountAmount > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-green-700 flex items-center gap-1">
+                                <i className="ri-coin-line text-xs"></i>
+                                {COIN_LABEL}折抵（{coinAmount.toLocaleString()} {COIN_LABEL}）
+                              </span>
+                              <span className="text-green-700 font-medium">
+                                -NT$ {coinDiscountAmount.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
                           
-                          {/* 總計 */}
+                          {/* 總計 / 應付金額 */}
                           <div className="border-t border-purple-200 pt-2 mt-2">
                             <div className="flex justify-between text-base font-semibold">
-                              <span className="text-gray-900">總計</span>
+                              <span className="text-gray-900">
+                                {useCoins && coinDiscountAmount > 0 ? '應付金額' : '總計'}
+                              </span>
                               <span className="text-purple-600 text-xl">
-                                NT$ {totalPrice.toLocaleString()}
+                                {finalPrice > 0 ? `NT$ ${finalPrice.toLocaleString()}` : '免費'}
                               </span>
                             </div>
                           </div>
@@ -904,8 +1114,8 @@ const EventJoin: React.FC = () => {
                       </div>
                     )}
 
-                    {/* 付款方式 */}
-                    {totalPrice > 0 && eventInfo.payment_info && eventInfo.payment_info.length > 0 && (
+                    {/* 付款方式 - 折抵後仍需付費才顯示 */}
+                    {finalPrice > 0 && eventInfo.payment_info && eventInfo.payment_info.length > 0 && (
                       <div className="space-y-4 pt-4 border-t">
                         <h3 className="text-lg font-medium text-gray-900">
                           付款方式 <span className="text-red-500">*</span>
@@ -1033,7 +1243,8 @@ const EventJoin: React.FC = () => {
                           <>
                             確認報名
                             {participantCount > 1 && <span className="ml-2">({participantCount}人)</span>}
-                            {totalPrice > 0 && <span className="ml-2">NT$ {totalPrice.toLocaleString()}</span>}
+                            {finalPrice > 0 && <span className="ml-2">NT$ {finalPrice.toLocaleString()}</span>}
+                            {totalPrice > 0 && finalPrice === 0 && <span className="ml-2">（{COIN_LABEL}全額折抵）</span>}
                           </>
                         )}
                       </button>

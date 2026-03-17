@@ -797,9 +797,10 @@ const CardDeckFormSimple: React.FC<CardDeckFormSimpleProps> = ({ deckId, onSucce
                       />
                     </div>
 
-                    {/* 圖片標題 */}
+                    {/* 位置標記 (正位/逆位) */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">圖片標題</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">位置標記</label>
+                      <p className="text-xs text-gray-500 mb-2">用於區分正位、逆位等不同牌面方向，若此卡無正逆位之分可留空</p>
                       <input
                         type="text"
                         value={image.caption}
@@ -809,7 +810,7 @@ const CardDeckFormSimple: React.FC<CardDeckFormSimpleProps> = ({ deckId, onSucce
                           setCards(newCards);
                         }}
                         className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                        placeholder="輸入圖片標題"
+                        placeholder="例如：正位、逆位"
                       />
                     </div>
 

@@ -1,11 +1,13 @@
 // CardDraw 模板索引
 import BaseTemplate from './BaseTemplate';
 import Flex01Template from './Flex01Template';
+import Flex02Template from './Flex02Template';
 
 // 模板映射表
 export const CARD_DRAW_TEMPLATES = {
   base: BaseTemplate,
   flex_01: Flex01Template,
+  flex_02: Flex02Template,
   // 未來可新增更多模板：
   // modern: ModernTemplate,
   // classic: ClassicTemplate,
@@ -25,4 +27,4 @@ export const getTemplate = (templateName?: string) => {
   return CARD_DRAW_TEMPLATES[DEFAULT_TEMPLATE];
 };
 
-export { BaseTemplate, Flex01Template };
+export { BaseTemplate, Flex01Template, Flex02Template };

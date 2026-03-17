@@ -23,6 +23,7 @@ import {
   Wallet
 } from 'lucide-react';
 import { api, API_ENDPOINTS, createOrder } from '../../config/api';
+import { COIN_LABEL } from '../../config/terms';
 import { useToast } from '../../hooks/useToast';
 import { AI_COLORS } from '../../constants/colors';
 import { useAuth } from '../../contexts/AuthContext';
@@ -348,7 +349,7 @@ const TicketShop: React.FC<{
           return `${amount} 積分`;
         case 'coins':
         case 'coins_special':
-          return `${amount} 金幣`;
+          return `${amount} ${COIN_LABEL}`;
         case 'tokens':
           return `${amount} 代幣`;
         default:
@@ -651,6 +652,7 @@ const MyTicketsTab: React.FC<{
   clientSid: string;
 }> = ({ clientSid }) => {
   const { showSuccess, showError } = useToast();
+  const { checkAuth } = useAuth();
 
   const [tickets, setTickets] = useState<MyTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -710,6 +712,8 @@ const MyTicketsTab: React.FC<{
       if (response.data.success) {
         showSuccess(response.data.message || '兌換成功');
         loadTickets();
+        // 重新請求以更新 feature_flag
+        await checkAuth(true);
       } else {
         showError(response.data.message || '兌換失敗');
       }
@@ -801,7 +805,7 @@ const MyTicketsTab: React.FC<{
           return `${amount} 積分`;
         case 'coins':
         case 'coins_special':
-          return `${amount} 金幣`;
+          return `${amount} ${COIN_LABEL}`;
         case 'tokens':
           return `${amount} 代幣`;
         default:

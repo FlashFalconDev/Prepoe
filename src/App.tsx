@@ -23,6 +23,7 @@ const VideoCreation = React.lazy(() => import('./pages/VideoCreation'));
 const Audio = React.lazy(() => import('./pages/Audio'));
 const Article = React.lazy(() => import('./pages/Article'));
 const CardHack = React.lazy(() => import('./pages/CardHack'));
+const CardDeckWizard = React.lazy(() => import('./pages/CardDeckWizard'));
 const CardDraw = React.lazy(() => import('./pages/CardDraw'));
 const CardDrawTest = React.lazy(() => import('./pages/CardDrawTest'));
 const FlexView = React.lazy(() => import('./pages/FlexView'));
@@ -50,10 +51,14 @@ const ManageKeys = React.lazy(() => import('./pages/manage/ManageKeys'));
 const ShopLayout = React.lazy(() => import('./components/ShopLayout'));
 const ShopHome = React.lazy(() => import('./pages/shop/ShopHome'));
 const ShopProducts = React.lazy(() => import('./pages/shop/ShopProducts'));
-const ShopFood = React.lazy(() => import('./pages/shop/ShopFood'));
 const ShopTickets = React.lazy(() => import('./pages/shop/ShopTickets'));
 const ShopMember = React.lazy(() => import('./pages/shop/ShopMember'));
+const ShopRecharge = React.lazy(() => import('./pages/shop/ShopRecharge'));
+const ShopEvents = React.lazy(() => import('./pages/shop/ShopEvents'));
 const MyTickets = React.lazy(() => import('./pages/shop/MyTickets'));
+
+// 懶載入抽卡系統
+const DrawRoutes = React.lazy(() => import('./pages/draw'));
 
 // 懶載入商務客戶頁面
 const BusinessOverview = React.lazy(() => import('./pages/business/BusinessOverview'));
@@ -73,6 +78,8 @@ const MentorDetail = React.lazy(() => import('./pages/user/MentorDetail'));
 const UserViews = React.lazy(() => import('./pages/user/UserViews'));
 const DrawHistory = React.lazy(() => import('./pages/user/DrawHistory'));
 const TicketCenter = React.lazy(() => import('./pages/user/TicketCenter'));
+const UserSpreadItems = React.lazy(() => import('./pages/user/UserSpreadItems'));
+const SpreadDetail = React.lazy(() => import('./pages/user/SpreadDetail'));
 
 // 載入中組件
 const LoadingSpinner = () => (
@@ -117,6 +124,7 @@ function App() {
                             <Route path="audio" element={<Audio />} />
                             <Route path="article" element={<Article />} />
                             <Route path="cardhack" element={<CardHack />} />
+                            <Route path="cardhack/wizard" element={<CardDeckWizard />} />
                           </Route>
                           {/* AI客服管理路由 */}
                           <Route path="/ai-service" element={<AIServiceManagement />} />
@@ -150,6 +158,8 @@ function App() {
                         <Route path="/mentors" element={<UserMentors />} />
                         <Route path="/provider/:slug" element={<MentorDetail />} />
                         <Route path="/event" element={<UserEvent />} />
+                        <Route path="/spread" element={<UserSpreadItems />} />
+                        <Route path="/spread/:sku" element={<SpreadDetail />} />
                         <Route path="/articles" element={<UserArticles />} />
                         <Route path="/articles/:slug" element={<ArticleDetail />} />
                         <Route path="/profile" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
@@ -214,6 +224,16 @@ function App() {
                 }
               />
 
+              {/* 抽卡系統路由 - 部分公開（深度解析需登入） */}
+              <Route
+                path="/draw/*"
+                element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <DrawRoutes />
+                  </Suspense>
+                }
+              />
+
               {/* 抽卡牌路由 - 公開頁面（使用 quota API） */}
               <Route
                 path="/card/:clientSid/:spreadCode"
@@ -253,10 +273,13 @@ function App() {
                       <Routes>
                         <Route path="/" element={<ShopHome />} />
                         <Route path="/products" element={<ShopProducts />} />
-                        <Route path="/food" element={<ShopFood />} />
                         <Route path="/tickets" element={<ShopTickets />} />
+                        <Route path="/events" element={<ShopEvents />} />
+                        <Route path="/event/join/:sku" element={<EventJoin />} />
+                        <Route path="/recharge" element={<ShopRecharge />} />
                         <Route path="/my-tickets" element={<MyTickets />} />
                         <Route path="/member" element={<ShopMember />} />
+                        <Route path="/member/recharge" element={<ShopRecharge />} />
                         <Route path="/member/*" element={<ShopMember />} />
                       </Routes>
                     </ShopLayout>

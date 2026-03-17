@@ -19,3 +19,18 @@ body {
 #root {
   min-height: 100vh;
 }
+
+@keyframes fly-to-cart {
+  0% {
+    left: var(--fly-start-x, 50%);
+    top: var(--fly-start-y, 50%);
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    left: calc(100vw - 2.75rem);
+    top: calc(100vh - 7.75rem);
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+}

@@ -1,13 +1,13 @@
-import { 
-  initiateGoogleLogin, 
-  initiateLineLogin, 
-  initiateFacebookLogin, 
+import {
+  initiateGoogleLogin,
+  initiateLineLogin,
+  initiateFacebookLogin,
   initiateAppleLogin,
   handleThirdPartyCallback,
   API_BASE,
-  getAppBase
+  getAppBase,
+  api
 } from '../config/api';
-import axios from 'axios';
 
 // 第三方登入提供者類型
 export type ThirdPartyProvider = 'google' | 'line' | 'facebook' | 'apple';
@@ -61,17 +61,14 @@ const getThirdPartyConfig = (): ThirdPartyConfig => ({
   },
 });
 
-// 從後端取得 state
+// 從後端取得 state（使用 api 實例確保攜帶 session cookie）
 const fetchStateFromBackend = async (nextPath?: string): Promise<string> => {
-  const clientSid = localStorage.getItem('client_sid') || import.meta.env.VITE_CLIENT_SID;
-  let url = `${API_BASE}/api/auth/generate_state/?client_sid=${clientSid}`;
-
-  // 如果有 next 路徑，附加到 URL
+  const params: Record<string, string> = {};
   if (nextPath) {
-    url += `&next=${encodeURIComponent(nextPath)}`;
+    params.next = nextPath;
   }
-
-  const { data } = await axios.get(url);
+  // client_sid 由 request interceptor 自動附加
+  const { data } = await api.get(`${API_BASE}/api/auth/generate_state/`, { params });
   return data.state;
 };
 

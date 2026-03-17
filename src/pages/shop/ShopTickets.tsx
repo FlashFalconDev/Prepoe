@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { Ticket, Clock, Tag, Gift, Percent, Search, ShoppingCart, Plus, Minus, X, CreditCard } from 'lucide-react';
 import { api, API_ENDPOINTS, createOrder } from '../../config/api';
+import { COIN_LABEL } from '../../config/terms';
 import { useToast } from '../../hooks/useToast';
 
-// 付款方式資訊
+// 付款方式資訊（Item API 規格：vendor_code / display_name；相容舊欄位 payment_type / payment_display）
 interface PaymentInfo {
-  payment_type: string;
-  payment_display: string;
+  vendor_code?: string;
+  display_name?: string;
+  payment_type?: string;
+  payment_display?: string;
+  data?: Record<string, unknown>;
+  icon?: string | null;
+  requires_options?: boolean;
 }
 
 // 票券商品資訊 (來自 eticket_info)
@@ -58,6 +64,7 @@ interface CartItem extends ShopItem {
 
 const ShopTickets: React.FC = () => {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showSuccess, showError } = useToast();
 
   // 從 URL 路徑解析 clientSid: /shop/:clientSid/tickets
@@ -96,6 +103,44 @@ const ShopTickets: React.FC = () => {
     }
   }, [clientSid]);
 
+  // 從抽卡推薦等外部進入：add_sku + open_cart=1 時，加入該票券並開啟購物車/結帳畫面
+  const addSkuHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const addSku = searchParams.get('add_sku');
+    const openCart = searchParams.get('open_cart') === '1';
+    if (!addSku || !openCart || tickets.length === 0 || addSkuHandledRef.current === addSku) return;
+    const item = tickets.find((t: ShopItem) => t.sku === addSku);
+    if (item) {
+      addSkuHandledRef.current = addSku;
+      setCart(prev => {
+        const existing = prev.find(cartItem => cartItem.item_pk === item.item_pk);
+        if (existing) {
+          const availableStock = item.eticket_info.available_stock;
+          const usageLimit = item.eticket_info.usage_limit_per_member;
+          const maxQty = Math.min(
+            availableStock !== null ? availableStock : Infinity,
+            usageLimit && usageLimit > 0 ? usageLimit : Infinity
+          );
+          if (existing.quantity >= maxQty) {
+            showError(`此票券最多只能購買 ${maxQty} ${item.unit}`);
+            return prev;
+          }
+          return prev.map(cartItem =>
+            cartItem.item_pk === item.item_pk ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem
+          );
+        }
+        return [...prev, { ...item, quantity: 1 }];
+      });
+      setShowCartModal(true);
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('add_sku');
+        next.delete('open_cart');
+        return next;
+      }, { replace: true });
+    }
+  }, [tickets, searchParams, setSearchParams, showError]);
+
   const loadTickets = async () => {
     if (hasLoadedRef.current || isLoadingRef.current) return;
 
@@ -121,9 +166,9 @@ const ShopTickets: React.FC = () => {
         // 設置付款方式
         if (response.data.payment_info) {
           setPaymentInfo(response.data.payment_info);
-          // 預設選擇第一個付款方式
           if (response.data.payment_info.length > 0) {
-            setSelectedPayment(response.data.payment_info[0].payment_type);
+            const first = response.data.payment_info[0];
+            setSelectedPayment(first.vendor_code ?? first.payment_type ?? '');
           }
         }
       } else if (response.data.success === false) {
@@ -217,6 +262,7 @@ const ShopTickets: React.FC = () => {
           quantity: item.quantity,
         })),
         payment_method: totalPrice > 0 ? selectedPayment : 'free',
+        return_url: window.location.href,
       };
 
       const response = await createOrder(orderData);
@@ -294,7 +340,7 @@ const ShopTickets: React.FC = () => {
           return `${amount} 積分`;
         case 'coins':
         case 'coins_special':
-          return `${amount} 金幣`;
+          return `${amount} ${COIN_LABEL}`;
         case 'tokens':
           return `${amount} 代幣`;
         default:
@@ -589,19 +635,23 @@ const ShopTickets: React.FC = () => {
                       選擇付款方式
                     </h4>
                     <div className="grid grid-cols-2 gap-2">
-                      {paymentInfo.map((payment) => (
-                        <button
-                          key={payment.payment_type}
-                          onClick={() => setSelectedPayment(payment.payment_type)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                            selectedPayment === payment.payment_type
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {payment.payment_display}
-                        </button>
-                      ))}
+                      {paymentInfo.map((payment) => {
+                        const code = payment.vendor_code ?? payment.payment_type ?? '';
+                        const label = payment.display_name ?? payment.payment_display ?? code;
+                        return (
+                          <button
+                            key={code}
+                            onClick={() => setSelectedPayment(code)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                              selectedPayment === code
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

@@ -11,6 +11,7 @@ interface KeyBatchCreateModalProps {
   onCreated?: (result: any) => void;
   managedClientId?: number;
   userRole?: string; // 用戶在該公司的角色
+  initialMode?: 'unique' | 'event' | 'achievement'; // 預設模式
 }
 
 const defaultPayload: KeyBatchCreatePayload = {
@@ -24,7 +25,7 @@ const defaultPayload: KeyBatchCreatePayload = {
   allowed_channels: ['WEB'],
 };
 
-const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClose, onCreated, managedClientId, userRole }) => {
+const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClose, onCreated, managedClientId, userRole, initialMode }) => {
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
   const [payload, setPayload] = useState<KeyBatchCreatePayload>(defaultPayload);
@@ -35,12 +36,13 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
 
   useEffect(() => {
     if (isOpen) {
-      setPayload({ ...defaultPayload, managed_client_id: managedClientId });
+      setPayload({ ...defaultPayload, managed_client_id: managedClientId, ...(initialMode ? { mode: initialMode } : {}) });
       setSubmitting(false);
     }
   }, [isOpen, managedClientId]);
 
   const isUnique = payload.mode === 'unique';
+  const isAchievement = payload.mode === 'achievement';
 
   const preview = useMemo(() => {
     const copy: any = { ...payload };
@@ -49,12 +51,19 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
       delete copy.event_code;
       delete copy.max_uses;
       delete copy.per_member;
+    } else if (isAchievement) {
+      delete copy.count;
+      delete copy.code_len;
+      delete copy.event_code;
+      delete copy.max_uses;
+      delete copy.per_member;
+      delete copy.days;
     } else {
       delete copy.count;
       delete copy.code_len;
     }
     return copy;
-  }, [payload, isUnique]);
+  }, [payload, isUnique, isAchievement]);
 
   const validate = (): string | null => {
     if (!payload.title || payload.title.trim().length === 0) return '請輸入批次標題';
@@ -70,6 +79,8 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
     if (isUnique) {
       if (!payload.count || payload.count <= 0) return '請輸入有效的數量';
       if (!payload.code_len || payload.code_len < 6 || payload.code_len > 32) return '金鑰長度需介於 6~32';
+    } else if (isAchievement) {
+      // ACHIEVEMENT 模式不需要額外欄位驗證
     } else {
       if (!payload.max_uses || payload.max_uses <= 0) return '請輸入總使用次數限制';
       if (!payload.per_member || payload.per_member <= 0) return '請輸入每人可使用次數';
@@ -121,21 +132,29 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">模式</label>
               <div className="flex items-center gap-4">
-                <label className="inline-flex items-center gap-2 text-sm">
+                <label className="inline-flex items-center gap-2 text-sm cursor-pointer" title="UNIQUE">
                   <input
                     type="radio"
                     checked={payload.mode === 'unique'}
                     onChange={() => setPayload({ ...payload, mode: 'unique' })}
                   />
-                  UNIQUE（一次性）
+                  一次性
                 </label>
-                <label className="inline-flex items-center gap-2 text-sm">
+                <label className="inline-flex items-center gap-2 text-sm cursor-pointer" title="EVENT">
                   <input
                     type="radio"
                     checked={payload.mode === 'event'}
                     onChange={() => setPayload({ ...payload, mode: 'event' })}
                   />
-                  EVENT（事件代碼）
+                  事件代碼
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm cursor-pointer" title="ACHIEVEMENT">
+                  <input
+                    type="radio"
+                    checked={payload.mode === 'achievement'}
+                    onChange={() => setPayload({ ...payload, mode: 'achievement', days: undefined })}
+                  />
+                  條件觸發
                 </label>
               </div>
             </div>
@@ -152,6 +171,7 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
+              {!isAchievement && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">有效天數</label>
                 <input
@@ -162,6 +182,7 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
                   min={1}
                 />
               </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">贈送點數</label>
                 <input
@@ -233,7 +254,7 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
             )}
 
             {/* EVENT */}
-            {!isUnique && (
+            {payload.mode === 'event' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">事件代碼</label>
@@ -280,19 +301,21 @@ const KeyBatchCreateModal: React.FC<KeyBatchCreateModalProps> = ({ isOpen, onClo
           <div className="p-5 bg-gray-50">
             <h4 className="font-medium text-gray-900 mb-3">即時預覽</h4>
             <div className="text-sm text-gray-700 space-y-2">
-              <div>模式：<span className="font-semibold">{isUnique ? 'UNIQUE (一次性)' : 'EVENT (事件代碼)'}</span></div>
+              <div>模式：<span className="font-semibold">{isUnique ? '一次性' : isAchievement ? '條件觸發' : '事件代碼'}</span></div>
               <div>標題：<span className="font-semibold">{payload.title || '—'}</span></div>
               {payload.managed_client_id ? (
                 <div>managed_client_id：<span className="font-semibold">{payload.managed_client_id}</span></div>
               ) : null}
               {isUnique ? (
                 <div>將產生 <span className="font-semibold">{payload.count || 0}</span> 組、長度 <span className="font-semibold">{payload.code_len || 0}</span> 的唯一金鑰</div>
+              ) : isAchievement ? (
+                <div>條件觸發專用金鑰（無有效天數限制）</div>
               ) : (
                 <div>事件代碼 <span className="font-semibold">{payload.event_code || '(自動產生)'}</span>，總使用 <span className="font-semibold">{payload.max_uses || 0}</span> 次、每人 <span className="font-semibold">{payload.per_member || 0}</span> 次</div>
               )}
               {(payload.points || 0) > 0 && <div>贈送點數：<span className="font-semibold">{payload.points}</span></div>}
               {isAdmin && (payload.tokens || 0) > 0 && <div>贈送 Tokens：<span className="font-semibold">{payload.tokens}</span></div>}
-              <div>有效天數：{payload.days || 0} 天</div>
+              {!isAchievement && <div>有效天數：{payload.days || 0} 天</div>}
               <div>允許通道：{(payload.allowed_channels || []).join('、') || '—'}</div>
             </div>
 

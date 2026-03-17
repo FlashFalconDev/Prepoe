@@ -8,6 +8,8 @@ import RichMenuEditor from '../components/RichMenuEditor';
 import { useAuth } from '../contexts/AuthContext';
 import FeatureGate from '../components/FeatureGate';
 import KeysManagerModal from '../components/keys/KeysManagerModal';
+import TriggerManagerModal from '../components/keys/TriggerManagerModal';
+import RechargeManagerModal from '../components/keys/RechargeManagerModal';
 
 // CSRF Token 處理函數
 const getCSRFTokenFromCookie = (): string | null => {
@@ -187,7 +189,9 @@ const PrivateDomain: React.FC = () => {
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [extendClient, setExtendClient] = useState<LineClient | null>(null);
   const [showKeyCreate, setShowKeyCreate] = useState(false);
-  
+  const [showTriggerManager, setShowTriggerManager] = useState(false);
+  const [showRechargeManager, setShowRechargeManager] = useState(false);
+
   // 表單狀態
   const [formData, setFormData] = useState({
     name: '',
@@ -1404,6 +1408,8 @@ const PrivateDomain: React.FC = () => {
               <p className="text-sm text-gray-500 mb-6">{extendClient.company_info?.co_name || extendClient.managed_client_name}</p>
               <div className="grid grid-cols-1 gap-3">
                 <button onClick={() => { setShowExtendModal(false); setShowKeyCreate(true); }} className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">金鑰設定</button>
+                <button onClick={() => { setShowExtendModal(false); setShowTriggerManager(true); }} className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">成就觸發</button>
+                <button onClick={() => { setShowExtendModal(false); setShowRechargeManager(true); }} className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">儲值設定</button>
                 <button disabled className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-400 cursor-not-allowed">商城設定（即將推出）</button>
                 <button disabled className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-400 cursor-not-allowed">卡牌關聯（即將推出）</button>
                 <button onClick={() => { setShowExtendModal(false); navigate('/manage'); }} className="w-full py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">電子票券</button>
@@ -1420,6 +1426,18 @@ const PrivateDomain: React.FC = () => {
         managedClientName={extendClient?.company_info?.co_name || extendClient?.managed_client_name}
         managedClientSid={extendClient?.managed_client_sid}
         userRole={extendClient?.role}
+      />
+      <TriggerManagerModal
+        isOpen={showTriggerManager}
+        onClose={() => setShowTriggerManager(false)}
+        managedClientId={extendClient?.managed_client_id}
+        managedClientName={extendClient?.company_info?.co_name || extendClient?.managed_client_name}
+      />
+      <RechargeManagerModal
+        isOpen={showRechargeManager}
+        onClose={() => setShowRechargeManager(false)}
+        managedClientId={extendClient?.managed_client_id}
+        managedClientName={extendClient?.company_info?.co_name || extendClient?.managed_client_name}
       />
       </div>
     </FeatureGate>

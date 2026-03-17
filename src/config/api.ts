@@ -246,9 +246,13 @@ export const API_ENDPOINTS = {
   // EventOrderDetail CRUD API
   EVENT_ORDERS: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/orders/`,
 
-  // 訂單創建 API（用於活動報名支付）
+  // 訂單創建 API（用於活動報名支付 / event・eticket・retail）
   CREATE_ORDER: `${API_BASE}/item/api/create_order/`,
-  
+  // 更新訂單 API（僅待付款訂單，POS 修改用）
+  UPDATE_ORDER: `${API_BASE}/item/api/update_order/`,
+  // 感謝頁 URL（金流完成後導向，倒數結束後依 return_url 導回）
+  ITEM_THANKS_PAGE: (orderPk: number, orderSn: string) => `${API_BASE}/item/thanks_page/${orderPk}_${orderSn}/`,
+
   // EventParticipant CRUD API
   EVENT_PARTICIPANTS: (eventId: number) => `${API_BASE}/itemevent/api/events/${eventId}/participants/`,
   EVENT_PARTICIPANT_DETAIL: (participantId: number) => `${API_BASE}/itemevent/api/participants/${participantId}/`,
@@ -335,6 +339,18 @@ export const API_ENDPOINTS = {
   // 完整會員資料 API
   MEMBER_COMPLETE: `${API_BASE}/crm/api/member-complete/`,
 
+  // 會員興趣／行為紀錄 API
+  INTEREST_RECORD: `${API_BASE}/crm/api/interest/record/`,
+  INTEREST_TRACK_ITEM_VIEW: (clientSid: string) =>
+    `${API_BASE}/crm/api/${clientSid}/interest/track-item-view/`,
+  INTEREST_TRACK_ITEM_CART: (clientSid: string) =>
+    `${API_BASE}/crm/api/${clientSid}/interest/track-item-cart/`,
+
+  // 通知相關 API
+  NOTIFICATIONS_UNREAD: `${API_BASE}/crm/api/notifications/unread/`,
+  NOTIFICATIONS_ALL: `${API_BASE}/crm/api/notifications/all/`,
+  NOTIFICATION_UPDATE: (notificationId: number) => `${API_BASE}/crm/api/notifications/${notificationId}/`,
+
   // ==================== Keys 金鑰模組 API ====================
   KEYS_BATCH_CREATE: `${API_BASE}/keys/api/batches/create/`,
   KEYS_BATCH_LIST: `${API_BASE}/keys/api/batches/`,
@@ -344,7 +360,12 @@ export const API_ENDPOINTS = {
   KEYS_REDEMPTIONS: `${API_BASE}/keys/api/redemptions/`,
   KEYS_MARK_USED: (batchId: number) => `${API_BASE}/keys/api/batches/${batchId}/mark-used/`,
   KEYS_ETICKET_ITEMS: `${API_BASE}/keys/api/eticket-items/`,
-  
+
+  // Keys 條件觸發 API
+  KEYS_TRIGGERS_CREATE: `${API_BASE}/keys/api/triggers/create/`,
+  KEYS_TRIGGERS_LIST: `${API_BASE}/keys/api/triggers/`,
+  KEYS_TRIGGER_DETAIL: (triggerId: number) => `${API_BASE}/keys/api/triggers/${triggerId}/`,
+
   // ==================== AI 模組配置 API ====================
   AI_MODULES: `${API_BASE}/ai/api/get_AI_modules/`,
 
@@ -382,12 +403,36 @@ export const API_ENDPOINTS = {
   CARDHACK_INTERPRETATION_UPDATE: (interpId: number) => `${API_BASE}/cardhack/api/interpretations/${interpId}/update/`,
   CARDHACK_INTERPRETATION_DELETE: (interpId: number) => `${API_BASE}/cardhack/api/interpretations/${interpId}/delete/`,
 
-  // Spreads API
-  CARDHACK_SPREADS: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/`,
-  CARDHACK_SPREAD_CREATE: (deckId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/create/`,
-  CARDHACK_SPREAD_DETAIL: (deckId: number, spreadId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/${spreadId}/`,
-  CARDHACK_SPREAD_UPDATE: (deckId: number, spreadId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/${spreadId}/update/`,
-  CARDHACK_SPREAD_DELETE: (deckId: number, spreadId: number) => `${API_BASE}/cardhack/api/decks/${deckId}/spreads/${spreadId}/delete/`,
+  // Spreads API (flat 路徑，用 deck_id query param 篩選)
+  CARDHACK_SPREADS: `${API_BASE}/cardhack/api/spreads/`,
+  CARDHACK_SPREAD_CREATE: `${API_BASE}/cardhack/api/spreads/create/`,
+  CARDHACK_SPREAD_DETAIL: (spreadId: number) => `${API_BASE}/cardhack/api/spreads/${spreadId}/`,
+  CARDHACK_SPREAD_UPDATE: (spreadId: number) => `${API_BASE}/cardhack/api/spreads/${spreadId}/update/`,
+  CARDHACK_SPREAD_DELETE: (spreadId: number) => `${API_BASE}/cardhack/api/spreads/${spreadId}/delete/`,
+
+  // SpreadQuota API (牌陣配額)
+  CARDHACK_SPREAD_QUOTA: (spreadId: number) => `${API_BASE}/cardhack/api/spread-quota/${spreadId}/`,
+  CARDHACK_SPREAD_QUOTA_CREATE: (spreadId: number) => `${API_BASE}/cardhack/api/spread-quota/${spreadId}/create/`,
+  CARDHACK_SPREAD_QUOTA_UPDATE: (spreadId: number) => `${API_BASE}/cardhack/api/spread-quota/${spreadId}/update/`,
+  CARDHACK_SPREAD_QUOTA_DELETE: (spreadId: number) => `${API_BASE}/cardhack/api/spread-quota/${spreadId}/delete/`,
+
+  // SpreadRecommendedItem API (牌陣推薦商品)
+  SPREAD_RECOMMENDED_ITEMS: `${API_BASE}/cardhack/api/spread-recommended-items/`,
+  SPREAD_RECOMMENDED_ITEM_CREATE: `${API_BASE}/cardhack/api/spread-recommended-items/create/`,
+  SPREAD_RECOMMENDED_ITEM_UPDATE: (recId: number) => `${API_BASE}/cardhack/api/spread-recommended-items/${recId}/update/`,
+  SPREAD_RECOMMENDED_ITEM_DELETE: (recId: number) => `${API_BASE}/cardhack/api/spread-recommended-items/${recId}/delete/`,
+
+  // SpreadRecommendedPerson API (牌陣推薦人員)
+  SPREAD_RECOMMENDED_PERSONS: `${API_BASE}/cardhack/api/spread-recommended-persons/`,
+  SPREAD_RECOMMENDED_PERSON_CREATE: `${API_BASE}/cardhack/api/spread-recommended-persons/create/`,
+  SPREAD_RECOMMENDED_PERSON_UPDATE: (recId: number) => `${API_BASE}/cardhack/api/spread-recommended-persons/${recId}/update/`,
+  SPREAD_RECOMMENDED_PERSON_DELETE: (recId: number) => `${API_BASE}/cardhack/api/spread-recommended-persons/${recId}/delete/`,
+
+  // 推薦篩選器 API (標籤篩選商品/人員)
+  ITEM_TAGS: `${API_BASE}/item/api/tags/`,
+  ITEMS_BY_TAG: `${API_BASE}/item/api/items-by-tag/`,
+  PP_TAG_LIST: `${API_BASE}/pp/api/tag-pp-list/`,
+  PROFILES_BY_TAG: `${API_BASE}/pp/api/profiles-by-tag/`,
 
   // DrawSessions API
   CARDHACK_DRAW_SESSIONS: `${API_BASE}/cardhack/api/draw-sessions/`,
@@ -395,6 +440,8 @@ export const API_ENDPOINTS = {
   CARDHACK_DRAW_SESSION_DETAIL: (sessionId: number) => `${API_BASE}/cardhack/api/draw-sessions/${sessionId}/`,
   CARDHACK_DRAW_CREATE: (spreadCode: string) => `${API_BASE}/cardhack/api/draw/create/${spreadCode}/`,
   CARDHACK_DRAW_QUOTA: (spreadCode: string) => `${API_BASE}/cardhack/api/draw/quota/${spreadCode}/`,
+  // 問題提交（啟用 AI 時先問問題，存到後端）- POST body: { spread_code, note }
+  CARDHACK_QUESTION_SUBMIT: `${API_BASE}/cardhack/api/question/submit/`,
 
   // 會員抽卡紀錄 API
   CARDHACK_DRAW_HISTORY: `${API_BASE}/cardhack/api/draw/`,
@@ -402,6 +449,42 @@ export const API_ENDPOINTS = {
   // 公開牌陣列表 API (用於票券關聯)
   CARDHACK_PUBLIC_SPREADS: `${API_BASE}/cardhack/api/spreads/public/`,
 
+  // ==================== CardHack 需求單 API (Deck Generation Orders) ====================
+  // 需求單列表 (GET) - 取得使用者的所有需求單
+  CARDHACK_ORDERS: `${API_BASE}/cardhack/api/orders/`,
+  // 建立需求單 (POST) - 提交新的卡組生成需求
+  CARDHACK_ORDER_CREATE: `${API_BASE}/cardhack/api/orders/create/`,
+  // 需求單詳情 (GET) - 取得單一需求單完整資訊
+  CARDHACK_ORDER_DETAIL: (orderId: number) => `${API_BASE}/cardhack/api/orders/${orderId}/`,
+  // 需求單狀態 (GET) - 輕量查詢生成進度 (用於輪詢)
+  CARDHACK_ORDER_STATUS: (orderId: number) => `${API_BASE}/cardhack/api/orders/${orderId}/status/`,
+  // 取消需求單 (POST) - 取消尚未開始的需求單
+  CARDHACK_ORDER_CANCEL: (orderId: number) => `${API_BASE}/cardhack/api/orders/${orderId}/cancel/`,
+  // 重試單張卡牌 (POST) - 重新生成失敗的卡牌
+  CARDHACK_ORDER_CARD_RETRY: (orderId: number, cardIndex: number) => `${API_BASE}/cardhack/api/orders/${orderId}/cards/${cardIndex}/retry/`,
+  // 重試所有失敗 (POST) - 重新生成所有失敗的卡牌
+  CARDHACK_ORDER_RETRY_ALL_FAILED: (orderId: number) => `${API_BASE}/cardhack/api/orders/${orderId}/retry-failed/`,
+  // 取得牌組樣本 (GET) - 取得已完成訂單的卡牌樣本
+  CARDHACK_ORDER_SAMPLES: `${API_BASE}/cardhack/api/orders/sample/`,
+
+
+  // AI 解卦 (POST) - 提交 session_id 給 AI 解讀
+  CARDHACK_AI_SUBMIT: `${API_BASE}/cardhack/api/ai/submit/`,
+  // AI 解釋加購訂單 (POST) - 共用 create_order 流程，後端自動組 items
+  CARDHACK_AI_ADDON_ORDER_CREATE: `${API_BASE}/cardhack/api/ai/addon-order/create/`,
+
+  // ==================== SpreadItem 牌陣商品 API ====================
+  // 管理端 CRUD
+  SPREAD_ITEMS: `${API_BASE}/cardhack/api/spread-items/`,
+  SPREAD_ITEM_CREATE: `${API_BASE}/cardhack/api/spread-items/create/`,
+  SPREAD_ITEM_DETAIL: (spreadItemId: number) => `${API_BASE}/cardhack/api/spread-items/${spreadItemId}/`,
+  SPREAD_ITEM_UPDATE: (spreadItemId: number) => `${API_BASE}/cardhack/api/spread-items/${spreadItemId}/update/`,
+  SPREAD_ITEM_DELETE: (spreadItemId: number) => `${API_BASE}/cardhack/api/spread-items/${spreadItemId}/delete/`,
+  // 管理端：我的牌陣訂單
+  SPREAD_ITEMS_MY_ORDER: `${API_BASE}/cardhack/api/spread-items/my_order/`,
+  // 用戶端：依 SKU 查詢
+  SPREAD_ITEMS_SKU_LIST: `${API_BASE}/cardhack/api/spread-items_sku/`,
+  SPREAD_ITEMS_SKU_DETAIL: (sku: string) => `${API_BASE}/cardhack/api/spread-items_sku/${sku}/`,
   // ==================== FlexWeb API ====================
   FLEXWEB_BY_CODE: (code: string) => `${API_BASE}/flexweb/api/flexweb/${code}/`,
 
@@ -497,6 +580,21 @@ const getClientSidFromUrl = (): string | null => {
   return null;
 };
 
+/**
+ * 取得目前網域的子網域名稱（例如 react.flashfalcon.info -> react）
+ * - 本機開發（localhost、127.0.0.1）時回傳 null
+ * - 若沒有子網域（例如 flashfalcon.info）也回傳 null
+ */
+const getSubdomainFromHostname = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const hostname = window.location.hostname; // 例如 react.flashfalcon.info
+  const parts = hostname.split('.');
+  if (parts.length >= 3) {
+    return parts[0];
+  }
+  return null;
+};
+
 // 添加請求攔截器來自動添加CSRF token
 api.interceptors.request.use(
   async (config) => {
@@ -570,31 +668,30 @@ api.interceptors.response.use(
     console.error('錯誤訊息:', error.response?.data);
     console.error('完整錯誤:', error);
 
+    const originalRequest = error.config;
+
     if (error.response?.status === 401) {
       // 未授權,可能需要重新登入
       console.error('❌ 401 未授權錯誤 - 需要重新登入或授權失敗');
       console.error('後端回應:', error.response?.data);
-    } else if (error.response?.status === 403) {
-      // CSRF token錯誤，嘗試重新獲取
+    } else if (error.response?.status === 403 && originalRequest && !originalRequest._csrfRetried) {
+      // CSRF token錯誤，嘗試重新獲取（加入 _csrfRetried 防止無限遞迴）
+      originalRequest._csrfRetried = true;
       console.error('CSRF token錯誤，嘗試重新獲取...');
-      
+
       // 清除舊的CSRF token
       document.cookie = 'csrftoken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      
+
       try {
         // 重新獲取CSRF token
         await api.get(API_ENDPOINTS.CSRF);
         console.log('CSRF token重新獲取成功');
-        
-        // 重試原始請求
-        const originalRequest = error.config;
-        if (originalRequest) {
-          const csrfToken = getCSRFTokenFromCookie();
-          if (csrfToken) {
-            originalRequest.headers['X-CSRFToken'] = csrfToken;
-            console.log('重試請求，使用新的CSRF token');
-            return api(originalRequest);
-          }
+
+        const csrfToken = getCSRFTokenFromCookie();
+        if (csrfToken) {
+          originalRequest.headers['X-CSRFToken'] = csrfToken;
+          console.log('重試請求，使用新的CSRF token');
+          return api(originalRequest);
         }
       } catch (retryError) {
         console.error('重新獲取CSRF token失敗:', retryError);
@@ -691,42 +788,16 @@ export const handleThirdPartyCallback = async (code: string, state: string, prov
   console.log('=== 發送第三方登入回調請求 ===');
   console.log('Provider:', provider);
   console.log('Client SID:', clientSid);
-  console.log('Code length:', code.length);
-  console.log('State:', state);
 
-  // 嘗試方法1: provider 在 URL 路徑中 (/api/auth/callback/line/)
-  try {
-    console.log('嘗試方法1: /api/auth/callback/' + provider + '/');
-    const response = await api.post(
-      API_ENDPOINTS.THIRD_PARTY_CALLBACK_WITH_PROVIDER(provider),
-      {
-        code,
-        state,
-        client_sid: clientSid
-      }
-    );
-    console.log('✅ 方法1成功!');
-    return response;
-  } catch (error: any) {
-    console.log('❌ 方法1失敗:', error.response?.status, error.response?.data);
-
-    // 如果是404,代表endpoint不存在,嘗試方法2
-    if (error.response?.status === 404 || error.response?.status === 400) {
-      console.log('嘗試方法2: provider 在 request body 中');
-      return api.post(
-        API_ENDPOINTS.THIRD_PARTY_CALLBACK,
-        {
-          code,
-          state,
-          provider,
-          client_sid: clientSid
-        }
-      );
+  return api.post(
+    API_ENDPOINTS.THIRD_PARTY_CALLBACK,
+    {
+      code,
+      state,
+      provider,
+      client_sid: clientSid
     }
-
-    // 其他錯誤直接拋出
-    throw error;
-  }
+  );
 };
 
 // 文章相關 API 呼叫函式
@@ -1740,19 +1811,78 @@ export interface CreateOrderRequest {
   items: OrderItem[];
   payment_method: string; // 'LINEPay' | 'JkoPay' | 'NewebPay' | 'Cash'
   participant_info?: EventRegistrationData; // 活動參與者資訊
+  // 取餐/配送方式與聯絡資訊
+  consume_method?: {
+    method?: string;   // 'dine_in' | 'take_out' | 'delivery'
+    name?: string;     // 收件人姓名
+    phone?: string;    // 聯絡電話
+    address?: string;  // 配送地址
+  };
+  // 訂單折扣
+  discount_amount?: number;
+  // 訂單備註
+  remark?: string;
+  // 會員卡
+  member_card_id?: number | null; // null=訪客訂單；不傳=登入者本人會員卡
+  // Coin 折抵
+  use_coins?: number;
+  total_coins_used?: number;
+  coins_discount_amount?: number;
+  // 點數折抵
+  use_points?: number;
+  total_points_used?: number;
+  points_discount_amount?: number;
+  // 發票
+  invoice_type?: string; // paper | email | cloud_storage
+  invoice_information?: string;
+  // 付款完成後返回的 URL（感謝頁倒數結束後導向）
+  return_url?: string;
 }
 
 export interface CreateOrderResponse {
   success: boolean;
   message?: string;
+  /** 是否需導向金流（NewebPay/LINEPay） */
+  payment_required?: boolean;
+  payment_method?: string;
   payment_html?: string; // 第三方支付需要的 HTML 表單
+  order_sn?: string;
   data?: {
     order_id: number;
-    order_number: string;
+    order_sn?: string;
+    order_number?: string;
     total_amount: number;
+    discount_amount?: number;
+    payment_amount: number;
     payment_method: string;
-    payment_status: string;
+    payment_status?: string;
+    status?: string;
     participant_id?: number;
+    eticket_issued?: boolean;
+    issued_count?: number;
+  };
+}
+
+/** 更新訂單請求（僅待付款訂單；不支援活動 participant_info 重寫） */
+export interface UpdateOrderRequest {
+  order_sn: string;
+  items: Array<{ item_pk: number; quantity?: number; unit_price?: number; options?: unknown[] }>;
+  discount_amount?: number;
+  total_points_used?: number;
+  member_card_id?: number | null;
+}
+
+export interface UpdateOrderResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: {
+    order_sn: string;
+    order_id: number;
+    total_amount: number;
+    discount_amount: number;
+    payment_amount: number;
+    status: string;
   };
 }
 
@@ -2419,15 +2549,16 @@ export const canDeleteEvent = (event: ItemEventItem): boolean => {
   return event.statistics.total_registrations === 0;
 };
 
-// 獲取活動狀態顯示文字
+// 獲取活動狀態顯示文字（與後端參數表一致）
 export const getEventStatusDisplay = (status: string): string => {
   const statusMap: Record<string, string> = {
-    draft: '草稿',
     registration_open: '報名開放',
     registration_closed: '報名截止',
-    in_progress: '進行中',
-    completed: '已完成',
-    cancelled: '已取消'
+    full: '已額滿',
+    in_progress: '活動進行中',
+    finished: '活動結束',
+    cancelled: '活動取消',
+    draft: '草稿',
   };
   return statusMap[status] || status;
 };
@@ -2457,19 +2588,23 @@ export const getEventJoinInfo = async (sku: string, queryParams?: Record<string,
   return response.data;
 };
 
-// 獲取活動列表（不篩查使用者）
+// 獲取活動列表（不篩查使用者）；可帶 event_status 依狀態載入以加快載入；可傳 signal 供 StrictMode/cleanup 取消前次請求
 export const getEventSkuList = async (
   page = 1,
   perPage = 12,
-  providerSlug?: string
+  providerSlug?: string,
+  eventStatus?: string,
+  signal?: AbortSignal
 ): Promise<SingleResponse<{ events: ItemEventItem[] }>> => {
   const response = await api.get(API_ENDPOINTS.EVENT_SKU_LIST(), {
     params: {
       page,
       per_page: perPage,
       manager: 1,
-      ...(providerSlug ? { provider_slug: providerSlug } : {})
-    }
+      ...(providerSlug ? { provider_slug: providerSlug } : {}),
+      ...(eventStatus ? { event_status: eventStatus } : {}),
+    },
+    ...(signal ? { signal } : {}),
   });
   return response.data;
 };
@@ -2495,6 +2630,25 @@ export const createOrder = async (
     return {
       success: false,
       message: error.response?.data?.message || error.message || '創建訂單時發生錯誤'
+    };
+  }
+};
+
+/**
+ * 更新訂單（僅待付款訂單；event/eticket/retail 支援替換品項與金額，不支援活動 participant_info 重寫）
+ */
+export const updateOrder = async (
+  payload: UpdateOrderRequest
+): Promise<UpdateOrderResponse> => {
+  try {
+    const response = await api.post(API_ENDPOINTS.UPDATE_ORDER, payload);
+    return response.data;
+  } catch (error: any) {
+    console.error('更新訂單失敗:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || '更新訂單時發生錯誤',
+      error: error.response?.data?.error
     };
   }
 };
@@ -2948,6 +3102,11 @@ export interface MemberCard {
     id: number;
     name: string;
   };
+  // Coin 折抵配置（由後端 MemberInfoSerializer 回傳）
+  coins_per_twd?: number;              // N coin = 1 元（0 = 未開放）
+  coin_max_redeem_coins?: number;      // 可折抵 coin 上限
+  coin_max_redeem_amount_twd?: number; // 可折抵金額上限（元）
+  discount_rate?: number;              // 會員折扣率
 }
 
 // 會員詳細資料介面
@@ -3051,9 +3210,39 @@ export interface MemberDetailsUpdateResponse {
 
 // ==================== CRM 會員管理系統 API 函數 ====================
 
-// 取得會員卡資料
-export const getMemberCard = async (): Promise<MemberCardResponse> => {
-  const response = await api.get(API_ENDPOINTS.MEMBER_CARD);
+// 追蹤商品瀏覽行為（MemberInterest: target_type = item）
+export const trackItemView = async (
+  clientSid: string,
+  itemId: number | string,
+  source?: string
+) => {
+  return api.post(API_ENDPOINTS.INTEREST_TRACK_ITEM_VIEW(clientSid), {
+    item_id: itemId,
+    // source 預設使用子網域名稱（例如 react / prepoe）
+    source: source ?? getSubdomainFromHostname() ?? undefined,
+  });
+};
+
+// 追蹤加入購物車行為（MemberInterest: target_type = item_cart）
+export const trackItemCart = async (
+  clientSid: string,
+  itemId: number | string,
+  quantity: number,
+  source?: string
+) => {
+  return api.post(API_ENDPOINTS.INTEREST_TRACK_ITEM_CART(clientSid), {
+    item_id: itemId,
+    quantity,
+    // source 預設使用子網域名稱（例如 react / prepoe）
+    source: source ?? getSubdomainFromHostname() ?? undefined,
+  });
+};
+
+// 取得會員卡資料（可傳 order_amount 以計算該筆訂單的 coin 折抵上限）
+export const getMemberCard = async (orderAmount?: number): Promise<MemberCardResponse> => {
+  const response = await api.get(API_ENDPOINTS.MEMBER_CARD, {
+    params: orderAmount !== undefined ? { order_amount: orderAmount } : {},
+  });
   return response.data;
 };
 
@@ -3081,6 +3270,44 @@ export const getMemberComplete = async (): Promise<MemberCompleteResponse> => {
   return response.data;
 };
 
+// ==================== CRM 通知系統 API 函數 ====================
+
+export interface NotificationItem {
+  id: number;
+  scheduled_at: string;
+  channel: string;
+  title: string;
+  content: string;
+  is_completed: boolean;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  success: boolean;
+  data: {
+    notifications: NotificationItem[];
+    total_count: number;
+    channel: string;
+  };
+  message: string;
+}
+
+// 取得尚未提示的站內通知
+export const getUnreadNotifications = async (channel: string = 'inapp'): Promise<NotificationsResponse> => {
+  const response = await api.get(API_ENDPOINTS.NOTIFICATIONS_UNREAD, {
+    params: { channel },
+  });
+  return response.data;
+};
+
+// 標記通知為已讀
+export const markNotificationRead = async (notificationId: number): Promise<any> => {
+  const response = await api.patch(API_ENDPOINTS.NOTIFICATION_UPDATE(notificationId), {
+    is_completed: true,
+  });
+  return response.data;
+};
+
 // ==================== Keys 金鑰模組 - 型別與 API 方法 ====================
 // 票券獎勵設定型別
 export interface EticketReward {
@@ -3102,7 +3329,7 @@ export interface EticketItemOption {
 }
 
 export interface KeyBatchCreatePayload {
-  mode: 'unique' | 'event';
+  mode: 'unique' | 'event' | 'achievement';
   title: string;
   days?: number;
   points?: number;
@@ -3169,6 +3396,152 @@ export const keysMarkUsed = async (batchId: number) => {
 // 取得可選票券商品列表（用於金鑰建立時選擇票券獎勵）
 export const keysGetEticketItems = async (params: { managed_client_id: number }) => {
   const response = await api.get(API_ENDPOINTS.KEYS_ETICKET_ITEMS, { params });
+  return response.data;
+};
+
+// ==================== 條件觸發（Triggers）相關介面與 API ====================
+
+export type TriggerType = 'order_amount' | 'new_member' | 'achievement' | 'product_purchase';
+export type AchievementConditionType = 'order_total_amount' | 'order_count' | 'first_purchase';
+export type RewardScope = 'lifetime_once' | 'period_once';
+
+export interface KeyTriggerCreatePayload {
+  managed_client_id: number;
+  batch_id: number;
+  trigger_type: TriggerType;
+  // order_amount
+  min_amount?: number;
+  // new_member
+  trigger_at?: 'first_paid_order' | 'card_created';
+  // achievement
+  achievement_condition_type?: AchievementConditionType;
+  achievement_condition_value?: number;
+  reward_scope?: RewardScope;
+  event_type?: string;
+  // product_purchase
+  item_info_ids?: number[];
+  // 共通
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface KeyTriggerUpdatePayload {
+  managed_client_id: number;
+  trigger_type?: TriggerType;
+  min_amount?: number;
+  trigger_at?: 'first_paid_order' | 'card_created';
+  achievement_condition_type?: AchievementConditionType;
+  achievement_condition_value?: number;
+  reward_scope?: RewardScope;
+  event_type?: string;
+  item_info_ids?: number[];
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface KeyTriggerItem {
+  id: number;
+  client_id: number;
+  batch_id: number;
+  batch_title: string;
+  key_type: string;
+  trigger_type: TriggerType;
+  condition_summary: string;
+  sort_order: number;
+  is_active: boolean;
+  min_amount: number | null;
+  trigger_at: string | null;
+  reward_scope: RewardScope | null;
+  achievement_condition_type: AchievementConditionType | null;
+  achievement_condition_value: number | null;
+  event_type: string | null;
+  item_info_ids: number[] | null;
+  condition_json: Record<string, any>;
+  batch?: Record<string, any>;
+}
+
+// 建立條件觸發
+export const keysCreateTrigger = async (payload: KeyTriggerCreatePayload) => {
+  const response = await api.post(API_ENDPOINTS.KEYS_TRIGGERS_CREATE, payload);
+  return response.data;
+};
+
+// 條件觸發列表
+export const keysListTriggers = async (params: {
+  managed_client_id: number;
+  batch_id?: number;
+  trigger_type?: TriggerType;
+  is_active?: string;
+}) => {
+  const response = await api.get(API_ENDPOINTS.KEYS_TRIGGERS_LIST, { params });
+  return response.data;
+};
+
+// 條件觸發詳情
+export const keysGetTriggerDetail = async (triggerId: number, params: { managed_client_id: number }) => {
+  const response = await api.get(API_ENDPOINTS.KEYS_TRIGGER_DETAIL(triggerId), { params });
+  return response.data;
+};
+
+// 更新條件觸發
+export const keysUpdateTrigger = async (triggerId: number, payload: KeyTriggerUpdatePayload) => {
+  const response = await api.patch(API_ENDPOINTS.KEYS_TRIGGER_DETAIL(triggerId), payload);
+  return response.data;
+};
+
+// 刪除條件觸發
+export const keysDeleteTrigger = async (triggerId: number, params: { managed_client_id: number }) => {
+  const response = await api.delete(API_ENDPOINTS.KEYS_TRIGGER_DETAIL(triggerId), { params });
+  return response.data;
+};
+
+// ==================== 儲值商品（Recharge Items）相關介面與 API ====================
+
+export interface RechargeItem {
+  item_pk: number;
+  name: string;
+  base_price: number;
+  description: string;
+  is_active: boolean;
+  sku: string;
+  item_type: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RechargeItemCreatePayload {
+  managed_client_id: number;
+  name: string;
+  base_price: number;
+  description?: string;
+  is_active?: boolean;
+}
+
+// 共用既有 Item API 端點，以 item_type='recharge' 區分
+
+export const rechargeListItems = async (params?: { managed_client_id?: number }) => {
+  const response = await api.get(API_ENDPOINTS.SHOP_ITEMS, {
+    params: { type: 'recharge', ...params },
+  });
+  return response.data;
+};
+
+export const rechargeCreateItem = async (payload: RechargeItemCreatePayload) => {
+  const response = await api.post(`${API_BASE}/item/api/create_item/`, { ...payload, item_type: 'recharge' });
+  return response.data;
+};
+
+// 啟用／停用商品
+export const rechargeToggleActive = async (
+  itemId: number,
+  isActive: boolean,
+  managedClientId: number
+) => {
+  const response = await api.post(`${API_BASE}/item/api/active_item/`, {
+    item_pk: itemId,
+    is_active: isActive,
+    managed_client_id: managedClientId,
+  });
   return response.data;
 };
 
@@ -3542,6 +3915,113 @@ export const getVideoGenerationWithImageDetail = async (videoGenerationId: numbe
       status: error.response?.status || 500
     };
   }
+};
+
+// ==================== SpreadItem 牌陣商品介面 ====================
+
+export interface SpreadItemImage {
+  id: number;
+  url: string;
+  thumbnail_url: string;
+  order: number;
+  ratio?: string;
+  file_extension?: string;
+  info?: string | null;
+  created_at?: string;
+}
+
+export interface SpreadItemSpread {
+  id: number;
+  code: string;
+  name: string;
+  draw_count: number;
+  flex_template?: string;
+  flex_template_details?: string;
+  unique_deck_card?: boolean;
+  ai_assistant_id?: number | null;
+  ai_interpretation_addon_price?: number;
+}
+
+export interface SpreadItem {
+  id: number;
+  item_pk?: number;
+  name: string;
+  description: string;
+  base_price: number;
+  cost_price?: number;
+  sku: string;
+  is_active: boolean;
+  unit: string;
+  order: number;
+  images: SpreadItemImage[];
+  main_image?: SpreadItemImage;
+  item_tags: Array<{ id: number; name: string; is_hidden: boolean }>;
+  spread: SpreadItemSpread;
+  created_at: string;
+  updated_at: string;
+  tags?: Array<{ id: number; name: string; is_hidden: boolean }>;
+  payment_info?: Array<{ payment_type: string; payment_display: string }>;
+  items_data?: SpreadItem[];
+}
+
+export interface SpreadOrderDetail {
+  spread_order_detail_id: number;
+  item_id: number;
+  item_name: string;
+  item_sku: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  is_fulfilled: boolean;
+  fulfilled_at: string | null;
+  created_at: string;
+}
+
+export interface SpreadOrder {
+  order_id: number;
+  order_sn: string;
+  status: string;
+  status_display: string;
+  total_amount: number;
+  discount_amount: number;
+  payment_amount: number;
+  created_at: string;
+  updated_at: string;
+  spread_items: SpreadOrderDetail[];
+  payment_info: any[];
+}
+
+// ==================== SpreadItem API 函數 ====================
+
+// 用戶端：取得牌陣商品列表
+export const getSpreadItemSkuList = async (
+  page = 1,
+  pageSize = 20,
+  search?: string
+): Promise<SingleResponse<{ items: SpreadItem[]; pagination: any }>> => {
+  const response = await api.get(API_ENDPOINTS.SPREAD_ITEMS_SKU_LIST, {
+    params: { page, page_size: pageSize, ...(search ? { search } : {}) }
+  });
+  return response.data;
+};
+
+// 用戶端：依 SKU 取得牌陣商品詳情
+export const getSpreadItemBysku = async (
+  sku: string,
+  referrer?: number
+): Promise<SingleResponse<SpreadItem>> => {
+  const response = await api.get(API_ENDPOINTS.SPREAD_ITEMS_SKU_DETAIL(sku), {
+    params: referrer !== undefined ? { referrer } : {}
+  });
+  return response.data;
+};
+
+// 管理端：取得我的牌陣訂單
+export const getSpreadItemMyOrders = async (
+  params?: { status?: string; page?: number; page_size?: number }
+): Promise<SingleResponse<{ orders: SpreadOrder[]; pagination: any }>> => {
+  const response = await api.get(API_ENDPOINTS.SPREAD_ITEMS_MY_ORDER, { params });
+  return response.data;
 };
 
 export { api };

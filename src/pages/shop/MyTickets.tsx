@@ -6,8 +6,10 @@ import {
   Send, Coins
 } from 'lucide-react';
 import { api, API_ENDPOINTS } from '../../config/api';
+import { COIN_LABEL } from '../../config/terms';
 import { useToast } from '../../hooks/useToast';
 import { useShopContext } from '../../components/ShopLayout';
+import { useAuth } from '../../contexts/AuthContext';
 
 // 票券項目資訊（嵌套物件）
 interface EticketItem {
@@ -47,6 +49,7 @@ const MyTickets: React.FC = () => {
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
   const { refreshMemberCard } = useShopContext();
+  const { checkAuth } = useAuth();
 
   // 從 URL 路徑解析 clientSid: /shop/:clientSid/my-tickets
   const clientSid = location.pathname.split('/')[2];
@@ -108,6 +111,8 @@ const MyTickets: React.FC = () => {
         loadTickets();
         // 刷新會員卡資料（點數可能增加）
         refreshMemberCard();
+        // 重新請求以更新 feature_flag
+        await checkAuth(true);
       } else {
         showError(response.data.message || '兌換失敗');
       }
@@ -220,7 +225,7 @@ const MyTickets: React.FC = () => {
         return `${(100 - discountPercent) / 10} 折`;
       }
     } else if (item.ticket_type === 'topup') {
-      const typeLabel = item.topup_type === 'points' ? '點' : item.topup_type === 'coins' ? '金幣' : '';
+      const typeLabel = item.topup_type === 'points' ? '點' : item.topup_type === 'coins' ? COIN_LABEL : '';
       return `${item.topup_amount} ${typeLabel}`;
     } else if (item.ticket_type === 'exchange') {
       return '兌換券';

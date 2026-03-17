@@ -41,7 +41,13 @@
       "Bash(npx vite build:*)",
       "Bash(node -e:*)",
       "Bash(dir:*)",
-      "Bash(cmd /c copy \"c:\\react\\Prepoe\\src\\pages\\CardDraw.tsx\" \"c:\\react\\Prepoe\\src\\pages\\CardDrawTest.tsx\")"
+      "Bash(cmd /c copy \"c:\\react\\Prepoe\\src\\pages\\CardDraw.tsx\" \"c:\\react\\Prepoe\\src\\pages\\CardDrawTest.tsx\")",
+      "Bash(cmd /c \"taskkill /PID 714580 /F\")",
+      "Bash(cmd /c \"ping 127.0.0.1 -n 6 > nul && type C:\\\\Users\\\\DCT\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--react-Prepoe\\\\tasks\\\\bca22da.output\")",
+      "Bash(mkdir:*)",
+      "Bash(grep -v \"//\")",
+      "Bash(xargs grep -l \"eticket\\\\|票券\\\\|UNIQUE\\\\|EVENT\")",
+      "Bash(lsof -i :3008)"
     ],
     "deny": [],
     "ask": []

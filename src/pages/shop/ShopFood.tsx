@@ -212,6 +212,7 @@ const ShopFood: React.FC = () => {
           quantity: item.quantity,
         })),
         payment_method: totalPrice > 0 ? selectedPayment : 'free',
+        return_url: window.location.href,
       };
 
       const response = await createOrder(orderData);

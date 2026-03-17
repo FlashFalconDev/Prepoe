@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import { api, API_ENDPOINTS } from '../config/api';
+import { COIN_LABEL } from '../config/terms';
 import { AI_COLORS } from '../constants/colors';
 
 // 牌陣資料型別
@@ -545,12 +546,12 @@ const ETicketForm: React.FC = () => {
                     >
                       <option value="">請選擇</option>
                       <option value="points">積分 (Points)</option>
-                      <option value="coins">金幣 (Coins)</option>
+                      <option value="coins">{COIN_LABEL} (Coins)</option>
                       <option value="spread_quota">牌陣次數 (Spread Quota)</option>
                       {(clientSid === 'prepoe' || clientSid === 'aiya') && (
                         <>
                           <option value="tokens">代幣 (Tokens)</option>
-                          <option value="coins_special">特殊金幣</option>
+                          <option value="coins_special">特殊{COIN_LABEL}</option>
                         </>
                       )}
                     </select>

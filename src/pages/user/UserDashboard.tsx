@@ -1,12 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Clock, X, User, Calendar, Ticket, CreditCard, BookOpen } from 'lucide-react';
+import { Star, Clock, X, User, Calendar, Ticket, CreditCard, BookOpen, MessageSquare, Wallet, Sparkles, ChevronRight, Gift } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMemberComplete, updateMemberDetails, type MemberComplete, type MemberDetailsUpdateData } from '../../config/api';
+import { getMemberComplete, updateMemberDetails, type MemberComplete, type MemberDetailsUpdateData, api, API_ENDPOINTS, createOrder, keysGetBatchDetail } from '../../config/api';
+import { COIN_LABEL, memberLabelMap } from '../../config/terms';
 import { useToast } from '../../hooks/useToast';
 import { AI_COLORS } from '../../constants/colors';
 import { handlePermissionRedeem } from '../../utils/permissionUtils';
 import MyOrdersModal from '../../components/MyOrdersModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+
+// 從批次詳情取得獎勵摘要文字
+const getBatchRewardText = (batch: any): string => {
+  const parts: string[] = [];
+  const grants: any[] = (batch.action_json?.grants || []) as any[];
+  const labelMap = memberLabelMap;
+  const totals = grants.reduce<Record<string, number>>((acc, g) => {
+    const key = (g.type || '').toLowerCase();
+    if (key !== 'role') acc[key] = (acc[key] || 0) + (Number(g.amount ?? g.value) || 0);
+    return acc;
+  }, {});
+  if (!totals.points && (batch.points || 0) > 0) totals.points = Number(batch.points);
+  if (!totals.coins && (batch.coins || 0) > 0) totals.coins = Number(batch.coins);
+  if (!totals.tokens && (batch.tokens || 0) > 0) totals.tokens = Number(batch.tokens);
+  Object.entries(totals).forEach(([k, v]) => { if (v > 0) parts.push(`${labelMap[k] || k} +${v}`); });
+  const etickets: any[] = batch.eticket_rewards || [];
+  if (etickets.length > 0) parts.push(...etickets.map((r: any) => `${r.eticket_item_name || '票券'}×${r.quantity || 1}`));
+  return parts.join('、');
+};
 
 // 專區卡片組件
 const FeatureCard: React.FC<{
@@ -59,6 +79,15 @@ const UserDashboard: React.FC = () => {
 
   // 我的訂單彈窗狀態
   const [isMyOrdersModalOpen, setIsMyOrdersModalOpen] = useState(false);
+
+  // 儲值 Modal
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [rechargeItems, setRechargeItems] = useState<any[]>([]);
+  const [rechargePaymentInfo, setRechargePaymentInfo] = useState<{ payment_type: string; payment_display: string }[]>([]);
+  const [rechargeLoading, setRechargeLoading] = useState(false);
+  const [selectedRechargeItem, setSelectedRechargeItem] = useState<any | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<string>('');
+  const [purchasing, setPurchasing] = useState(false);
 
   // 編輯表單狀態
   const [editForm, setEditForm] = useState<MemberDetailsUpdateData>({
@@ -164,6 +193,98 @@ const UserDashboard: React.FC = () => {
     }));
   };
 
+  // 儲值相關
+  const loadRechargeItems = async () => {
+    try {
+      setRechargeLoading(true);
+      const response = await api.get(API_ENDPOINTS.SHOP_ITEMS, {
+        params: { type: 'recharge' },
+      });
+      if (response.data.items) {
+        const filtered = (response.data.items || []).filter((i: any) => i.is_active && i.key_batches && i.key_batches.length > 0);
+        // 取得每個批次的詳細獎勵內容
+        const allBatchIds = filtered.flatMap((i: any) => (i.key_batches || []).map((b: any) => b.id));
+        if (allBatchIds.length > 0) {
+          const details = await Promise.allSettled(allBatchIds.map((id: number) => keysGetBatchDetail(id)));
+          const detailMap: Record<number, any> = {};
+          details.forEach((result, idx) => {
+            if (result.status === 'fulfilled' && result.value) {
+              const detail = result.value?.data?.batch || result.value?.batch || result.value?.data || result.value;
+              if (detail && typeof detail === 'object') detailMap[allBatchIds[idx]] = detail;
+            }
+          });
+          filtered.forEach((item: any) => {
+            (item.key_batches || []).forEach((batch: any) => {
+              if (detailMap[batch.id]) Object.assign(batch, detailMap[batch.id]);
+            });
+          });
+        }
+        setRechargeItems(filtered);
+        if (response.data.payment_info) {
+          setRechargePaymentInfo(response.data.payment_info);
+          if (response.data.payment_info.length > 0) {
+            setSelectedPayment(response.data.payment_info[0].payment_type);
+          }
+        }
+      }
+    } catch {
+      setRechargeItems([]);
+    } finally {
+      setRechargeLoading(false);
+    }
+  };
+
+  const openRechargeModal = () => {
+    setShowRechargeModal(true);
+    setSelectedRechargeItem(null);
+    loadRechargeItems();
+  };
+
+  const getItemPrice = (item: any) => item.price ?? item.base_price ?? 0;
+  const formatRechargePrice = (price: number) => price === 0 ? '免費' : `NT$ ${price.toLocaleString()}`;
+
+  const redirectToPayment = (html: string) => {
+    document.open();
+    document.write(html);
+    document.close();
+    const form = document.querySelector('form');
+    if (form) form.submit();
+  };
+
+  const handleRechargeCheckout = async () => {
+    if (!selectedRechargeItem) return;
+    const price = getItemPrice(selectedRechargeItem);
+    if (price > 0 && !selectedPayment) {
+      showToast({ type: 'error', title: '請選擇付款方式' });
+      return;
+    }
+    try {
+      setPurchasing(true);
+      const response = await createOrder({
+        items: [{ item_pk: selectedRechargeItem.item_pk, quantity: 1 }],
+        payment_method: price > 0 ? selectedPayment : 'free',
+        return_url: window.location.href,
+      });
+      if (response.success) {
+        if (response.payment_html) {
+          setShowRechargeModal(false);
+          redirectToPayment(response.payment_html);
+        } else {
+          showToast({ type: 'success', title: response.message || '儲值成功！' });
+          setShowRechargeModal(false);
+          setSelectedRechargeItem(null);
+          loadMemberData();
+        }
+      } else {
+        showToast({ type: 'error', title: response.message || '購買失敗' });
+      }
+    } catch (error: any) {
+      showToast({ type: 'error', title: error.response?.data?.message || '購買過程中發生錯誤' });
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
   // 組件載入時取得會員資料
   useEffect(() => {
     loadMemberData();
@@ -250,7 +371,7 @@ const UserDashboard: React.FC = () => {
                     <div className="text-lg font-bold text-yellow-600 mb-1">
                       {memberData.member_card.coins.toLocaleString()}
                     </div>
-                    <div className="text-xs text-gray-500">金幣</div>
+                    <div className="text-xs text-gray-500">{COIN_LABEL}</div>
                   </div>
                 </div>
 
@@ -309,6 +430,26 @@ const UserDashboard: React.FC = () => {
                     )}
                   </div>
                 )}
+
+                {/* 儲值入口 */}
+                <div className="mt-6 pt-6 border-t border-gray-100">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">帳戶儲值</h4>
+                  <button
+                    onClick={openRechargeModal}
+                    className="w-full bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-4 hover:border-amber-300 hover:shadow-sm transition-all text-left group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <Wallet size={20} className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900 text-sm">儲值方案</p>
+                        <p className="text-xs text-gray-500 mt-0.5">購買儲值方案，獲得積分、{COIN_LABEL}等獎勵</p>
+                      </div>
+                      <ChevronRight size={18} className="text-gray-300 group-hover:text-amber-500 transition-colors" />
+                    </div>
+                  </button>
+                </div>
               </>
             ) : (
               <div className="text-center py-8">
@@ -344,6 +485,12 @@ const UserDashboard: React.FC = () => {
               icon={CreditCard}
               title="抽卡紀錄"
               path="/client/draw-history"
+              isComingSoon={false}
+            />
+            <FeatureCard
+              icon={MessageSquare}
+              title="對話視窗"
+              path="/client/chat"
               isComingSoon={false}
             />
             <FeatureCard
@@ -679,6 +826,155 @@ const UserDashboard: React.FC = () => {
               >
                 確認兌換
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 儲值 Modal */}
+      {showRechargeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => !selectedRechargeItem && setShowRechargeModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                {selectedRechargeItem ? (
+                  <button onClick={() => setSelectedRechargeItem(null)} className="text-gray-400 hover:text-gray-600 mr-1">
+                    <ChevronRight size={20} className="rotate-180" />
+                  </button>
+                ) : (
+                  <Wallet size={20} className="text-amber-600" />
+                )}
+                <h3 className="text-lg font-bold text-gray-900">
+                  {selectedRechargeItem ? '確認付款' : '選擇儲值方案'}
+                </h3>
+              </div>
+              <button onClick={() => { setShowRechargeModal(false); setSelectedRechargeItem(null); }} className="p-1 hover:bg-gray-100 rounded-full">
+                <X size={22} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {selectedRechargeItem ? (
+                <div className="p-5">
+                  <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl mb-4">
+                    <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={18} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900 text-sm">{selectedRechargeItem.name}</h4>
+                      {selectedRechargeItem.description && (
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{selectedRechargeItem.description}</p>
+                      )}
+                    </div>
+                    <span className="text-xl font-bold text-amber-600 flex-shrink-0">
+                      {formatRechargePrice(getItemPrice(selectedRechargeItem))}
+                    </span>
+                  </div>
+
+                  {/* 購買獎勵 */}
+                  {selectedRechargeItem.key_batches && selectedRechargeItem.key_batches.length > 0 && (
+                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl">
+                      <h4 className="text-xs font-medium text-green-700 mb-1.5 flex items-center gap-1.5">
+                        <Gift size={14} />
+                        購買後可獲得
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedRechargeItem.key_batches.map((batch: any) => (
+                          <span key={batch.id} className="px-2 py-0.5 bg-white text-green-700 text-xs rounded-full border border-green-200">
+                            {getBatchRewardText(batch) || batch.title}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {getItemPrice(selectedRechargeItem) > 0 && rechargePaymentInfo.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <CreditCard size={16} className="text-gray-400" />
+                        付款方式
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {rechargePaymentInfo.map((p) => (
+                          <button
+                            key={p.payment_type}
+                            onClick={() => setSelectedPayment(p.payment_type)}
+                            className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                              selectedPayment === p.payment_type
+                                ? 'bg-amber-600 text-white border-amber-600'
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
+                            }`}
+                          >
+                            {p.payment_display}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleRechargeCheckout}
+                    disabled={purchasing || (getItemPrice(selectedRechargeItem) > 0 && !selectedPayment)}
+                    className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-yellow-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {purchasing ? '處理中...' : getItemPrice(selectedRechargeItem) === 0 ? '免費領取' : '確認付款'}
+                  </button>
+                </div>
+              ) : rechargeLoading ? (
+                <div className="p-5 space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-18 bg-gray-100 rounded-xl animate-pulse"></div>
+                  ))}
+                </div>
+              ) : rechargeItems.length > 0 ? (
+                <div className="p-5 space-y-2.5">
+                  {rechargeItems.map((item) => {
+                    const price = getItemPrice(item);
+                    return (
+                      <button
+                        key={item.item_pk}
+                        onClick={() => setSelectedRechargeItem(item)}
+                        className="w-full flex items-center gap-3 p-3.5 bg-white border border-gray-200 rounded-xl hover:border-amber-300 hover:shadow-sm transition-all text-left group"
+                      >
+                        <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                          {item.imgUrl ? (
+                            <img src={item.imgUrl} alt={item.name} className="w-full h-full rounded-lg object-cover" />
+                          ) : (
+                            <Sparkles size={18} className="text-white" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-gray-900 text-sm">{item.name}</h4>
+                          {item.description && (
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">{item.description}</p>
+                          )}
+                          {item.key_batches && item.key_batches.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.key_batches.map((batch: any) => (
+                                <span key={batch.id} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-50 text-green-700 text-[10px] rounded-full border border-green-200">
+                                  <Gift size={9} />
+                                  {getBatchRewardText(batch) || batch.title}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-base font-bold text-amber-600">{formatRechargePrice(price)}</span>
+                          <ChevronRight size={16} className="text-gray-300 group-hover:text-amber-500 transition-colors" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Wallet size={40} className="mx-auto text-gray-300 mb-2" />
+                  <p className="text-gray-500 text-sm">目前沒有儲值方案</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

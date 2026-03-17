@@ -21,6 +21,8 @@ const Login: React.FC = () => {
       if (fromLocation) {
         const fullPath = `${fromLocation.pathname}${fromLocation.search || ''}`;
         nextPath = normalizePath(fullPath);
+        // 保存到 localStorage，OAuth 外部跳轉後 AuthCallback 才能取得目標路徑
+        localStorage.setItem('login_redirect_path', nextPath);
       }
 
       // 將 next 路徑傳給授權函數
